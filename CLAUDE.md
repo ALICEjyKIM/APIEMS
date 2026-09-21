@@ -109,6 +109,7 @@ src/result: exp1/2/3 스크립트, plots, summary, runs/(원자료 json)
 - MILP는 gurobipy로 작성한다. 모델 파라미터 OutputFlag=0, Seed·Threads·MIPGap은 Cfg에서 고정한다.
 - 솔버 상태는 assert m.Status == GRB.OPTIMAL로 검사한다.
 - 재참여확률의 구간선형 근사는 addGenConstrPWL을 사용하고, 꺾인 점 생성은 utils/pwl.py가 담당한다.
+- 보고와 설명은 한국어로 한다.
 
 ## 검증 과정
 
