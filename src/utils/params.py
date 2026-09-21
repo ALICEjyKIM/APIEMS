@@ -49,9 +49,13 @@ class Cfg:
   pwl_n: int = 5
   pwl_hi: float = 0.97
   pwl_rmax: float = 1.0
-  # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫)
+  # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫). 규칙 기반은 공급자 몫을 후보 중 튜닝(sh_sup = 기본 시장 최선값)
   sh_buy: float = 0.3
   sh_sup: float = 0.3
+  sh_sup_grid: tuple = (0.1, 0.2, 0.3, 0.4)
+  # 튜닝·보정용 반복 (평가 seed와 분리)
+  tune_seed: int = 1
+  n_tune: int = 10
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
