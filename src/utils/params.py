@@ -56,10 +56,15 @@ class Cfg:
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
+  # 반응 기울기 보정 (bench/tune.py): [0, cal_hi] 이분탐색 cal_iter회, 주문자·공급자 교대 cal_alt회, 최선 몫 재튜닝 최대 cal_rounds회
+  cal_hi: float = 200.0
+  cal_iter: int = 10
+  cal_alt: int = 2
+  cal_rounds: int = 3
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
-  tol: float = 1e-6  # 결정 검사 허용 오차 (잉여 범위, 플랫폼 이윤 ≥ 0)
+  tol: float = 1e-4  # 결정 검사 허용 오차 (잉여 범위, 플랫폼 이윤 ≥ 0). 솔버 정수 허용오차 1e-5가 마진을 거쳐 전파되는 크기보다 크게
   grb_seed: int = 0
   grb_threads: int = 1
   mip_gap: float = 1e-6

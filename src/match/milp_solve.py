@@ -22,12 +22,18 @@ class Policy:
     self.rep = rep
 
   # 기간 결정: 최적해의 (배정 수량 x[b,j,i], 주문자 잉여, 공급자 잉여)
+  # 잉여는 반올림한 x의 마진에 맞춘다 (규칙 기반은 고정 비율 그대로, 나머지는 [0, 마진]으로 자름): 솔버 허용오차(1e-5) 정리
   def act(self, o):
     m, x, u, v = build(self.cfg, o, self.split, self.resp, self.coef and self.coef(o))
     m.optimize()
     assert m.Status == GRB.OPTIMAL
     self.obj = m.ObjVal
-    return np.rint(x.X).astype(int), u.X, v.X
+    x = np.rint(x.X).astype(int)
+    mg = (o.p[:, None] - o.c[None]) * x
+    g, mj = mg.sum((1, 2)), mg.sum((0, 2))
+    if self.split:
+      return x, self.split[0] * g, self.split[1] * mj
+    return x, np.clip(u.X, 0, g), np.clip(v.X, 0, mj)
 
   # 정산 결과 관찰 (아직 쓰지 않음)
   def observe(self, r):
