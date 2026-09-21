@@ -27,6 +27,14 @@ def test_supply_covers_steady_demand(k):
   assert abs(ratio.mean() - cfg.cover) < 0.2
 
 
+# 주문 한 건의 품목당 평균 수량이 품목별 총 공급용량의 1/4 이하다 (품목당 수량이 가장 큰 k = 1 포함)
+@pytest.mark.parametrize("k", [1, 2, 3])
+def test_order_small_vs_capacity(k):
+  cfg = replace(Cfg(), items_per_order=k)
+  lo, hi = qty_range(cfg)
+  assert (lo + hi) / 2 <= make(cfg, 0).sup_cap.sum(0).min() / 4
+
+
 # 공급 편중도를 바꿔도 공급자 수, 대체 공급자 수, 품목별 총 공급용량, 신규 주문(기대 수요)이 같다
 def test_conc_keeps_market_totals():
   cfg = Cfg()

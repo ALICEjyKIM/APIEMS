@@ -22,7 +22,7 @@ class Cfg:
   n_alt: int = 2
   items_per_order: int = 2
   # 주문자
-  lam_buy: float = 4.0
+  lam_buy: float = 10.0  # 기간당 신규 주문자 수 평균. 품목별 총 공급용량도 같은 비율로 커져 k = 1 주문 한 건(평균 21)이 용량(91)의 1/4 이하
   qty_lo: int = 2
   qty_hi: int = 5
   qty_unit: int = 3  # 수량 단위 배수 (공급용량도 같은 비율로 커짐)
