@@ -84,9 +84,11 @@ src/result: exp1/2/3 스크립트, plots, summary, runs/(원자료 json)
 - 들여쓰기 2칸, 세미콜론 금지
 - 주석: 모듈 docstring 3줄, 클래스 docstring 3줄, 함수는 첫 줄 # 주석 1줄
 - 변수명은 간결하게
-- try/except 금지 (스레딩 동기화 목적 제외). 솔버 상태는 assert로 검사
+- try/except 금지 (스레딩 동기화 목적 제외)
 - 모든 수치는 utils/params.py의 frozen Cfg에만 둔다
-- MILP는 PuLP로 작성
+- MILP는 gurobipy로 작성한다. 모델 파라미터 OutputFlag=0, Seed·Threads·MIPGap은 Cfg에서 고정한다.
+- 솔버 상태는 assert m.Status == GRB.OPTIMAL로 검사한다.
+- 재참여확률의 구간선형 근사는 addGenConstrPWL을 사용하고, 꺾인 점 생성은 utils/pwl.py가 담당한다.
 
 ## 검증 과정
 
