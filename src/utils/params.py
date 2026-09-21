@@ -41,6 +41,10 @@ class Cfg:
   # 재참여 변동
   noise_qty: float = 0.1
   noise_price: float = 0.05
+  # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱, 잉여 0이면 ret_p0, 기울기는 bench/tune.py로 보정
+  ret_p0: float = 0.1
+  b_buy: float = 30.0
+  b_sup: float = 30.0
   # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫)
   sh_buy: float = 0.3
   sh_sup: float = 0.3

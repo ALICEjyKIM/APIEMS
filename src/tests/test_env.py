@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from utils.params import Cfg
 from env.platform import Obs, Env, settle
+from env.response import Logistic
 from match.milp_solve import Policy
 from match.interface import rollout
 
@@ -136,3 +137,14 @@ def test_rollout_reproducible():
   a, b, c = (rollout(CFG, Policy(CFG), rep) for rep in (0, 0, 1))
   assert a == b
   assert a["profit"] != c["profit"]
+
+
+# 잉여 0이면 재참여 확률 = ret_p0, 잉여가 클수록 커지고, 잉여율 기준이라 잉여와 제안 금액을 같은 배수로 키우면 같다
+@pytest.mark.parametrize("kind", ["buy", "sup"])
+def test_logistic_response(kind):
+  f = Logistic(CFG)
+  assert f.prob(kind, 0.0, 400.0) == pytest.approx(CFG.ret_p0)
+  p = f.prob(kind, np.array([0.0, 10.0, 20.0, 40.0]), 400.0)
+  assert (np.diff(p) > 0).all() and p[-1] < 1
+  assert f.prob(kind, 20.0, 400.0) == pytest.approx(f.prob(kind, 60.0, 1200.0))
+  assert f.prob(kind, f.rate(kind, 0.7), 1.0) == pytest.approx(0.7)
