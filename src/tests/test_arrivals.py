@@ -8,19 +8,22 @@ import pytest
 from utils.params import Cfg
 from utils.instance import make, new_buy
 from utils.arrivals import new_buyers, new_sups, perturb
-from utils.common import rng
+from utils.common import rng, ret_u
 
 
-# 평균적으로 품목별 총 공급용량이 신규 주문 수요보다 크다
-def test_supply_covers_demand():
+# 재참여율 ret_ss로 쌓인 안정 상태 활동 주문자의 수요를 품목별 총 공급용량이 약 cover배로 감당한다
+def test_supply_covers_steady_demand():
   cfg = Cfg()
   inst = make(cfg, 0)
-  dem = np.zeros(cfg.n_items)
-  n = 400
-  for t in range(n):
-    for b in new_buyers(cfg, inst, 0, t):
-      dem += b.qty
-  assert (dem / n < inst.sup_cap.sum(0)).all()
+  act, dem, burn, n = [], np.zeros(cfg.n_items), 50, 400
+  for t in range(burn + n):
+    act = [(i, b) for i, b in act if ret_u(cfg, 0, "buy", i, t) < cfg.ret_ss]
+    act += [(t * 100 + k, b) for k, b in enumerate(new_buyers(cfg, inst, 0, t))]
+    if t >= burn:
+      dem += sum(b.qty for _, b in act)
+  ratio = inst.sup_cap.sum(0) / (dem / n)
+  assert (ratio > 1).all()
+  assert abs(ratio.mean() - cfg.cover) < 0.2
 
 
 # 다품목 공급자 비율 0이면 모든 공급자가 1품목만 공급한다

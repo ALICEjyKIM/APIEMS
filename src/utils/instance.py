@@ -47,12 +47,13 @@ def _slots(cfg, g):
   return items
 
 
-# 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량, 기간 0 공급자
+# 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량(안정 상태 활동 주문자 수요 × cover), 기간 0 공급자
 def make(cfg, rep):
   g = rng(cfg, rep, "inst")
   base = g.uniform(cfg.base_lo, cfg.base_hi, cfg.n_items)
   items = _slots(cfg, g)
-  dem = cfg.lam_buy * cfg.items_per_order / cfg.n_items * (cfg.qty_lo + cfg.qty_hi) / 2
+  act = cfg.lam_buy / (1 - cfg.ret_ss)
+  dem = act * cfg.items_per_order / cfg.n_items * (cfg.qty_lo + cfg.qty_hi) / 2
   cap = np.zeros(items.shape)
   for i in range(cfg.n_items):
     js = np.flatnonzero(items[:, i])

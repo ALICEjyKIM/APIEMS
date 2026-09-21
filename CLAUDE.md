@@ -2,7 +2,7 @@
 
 주제: 5PL 미들마일 플랫폼의 동적 매칭 및 잉여배분 (APIEMS 2026)
 구현 언어: Python
-현재 단계: 소규모 예비 실험 (공급자·품목 5~6개, 주문당 2~3품목, 기간 20~30, 반복 10~20)
+현재 단계: 소규모 예비 실험 (품목 5~6개, 공급자 6~10명(시장 조건에 따라 변동), 주문당 2~3품목, 기간 20~30, 반복 10~20)
 
 플랫폼은 다품종 묶음 주문을 내는 주문자와 품목별 공급 용량을 가진 공급자를 매칭하고,
 단일 허브로 통합 배송한다. 매 기간 (1) 주문 수락, (2) 품목별 공급자·수량 배정,
@@ -97,7 +97,8 @@ src/result: exp1/2/3 스크립트, plots, summary, runs/(원자료 json)
 ## 검증 과정
 
 - 슬라이스 단위로 구현하고, 슬라이스마다 pytest 통과 + MILP 최적해 확인 후 git commit
-- 테스트는 src/ 에서 `pytest tests` 로 실행
+- 모든 실행은 conda 환경 apiems의 python으로 한다 (C:\Users\Jiyoon\anaconda3\envs\apiems\python.exe, gurobipy·학술 라이선스 포함)
+- 테스트는 src/ 에서 `pytest tests` 로 실행 (apiems 환경: `conda run -n apiems pytest tests` 또는 위 python으로 `python -m pytest tests`)
 - 모든 실험 결과는 result/runs/*.json 에만 저장하고, 그림·요약은 그 json에서만 생성
 
 ## 주의사항

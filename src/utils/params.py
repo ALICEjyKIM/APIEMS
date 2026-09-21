@@ -30,6 +30,7 @@ class Cfg:
   cost_lo: float = 0.8
   cost_hi: float = 1.1
   cover: float = 1.3
+  ret_ss: float = 0.5
   p_sup_new: float = 0.5
   # 품목
   base_lo: float = 10.0
