@@ -30,7 +30,13 @@ class Inst:
   sups: list = field(default_factory=list)
 
 
-# 공급자별 품목 수: 균등 수열과 최대 편중 수열을 공급 편중도로 섞고 합이 연결 수가 되게 반올림
+# 품목당 주문 수량 범위: 주문당 품목 수 k에 k_ref/k배를 곱해 주문 총량과 품목별 기대 수요를 k와 무관하게 맞춘다
+def qty_range(cfg):
+  s = cfg.qty_unit * cfg.k_ref / cfg.items_per_order
+  return round(cfg.qty_lo * s), round(cfg.qty_hi * s)
+
+
+# 공급자별 품목 수:균등 수열과 최대 편중 수열을 공급 편중도로 섞고 합이 연결 수가 되게 반올림
 def _degrees(cfg):
   L, S, I = cfg.n_items * cfg.n_alt, cfg.n_sup, cfg.n_items
   assert cfg.n_alt <= S <= L
@@ -66,7 +72,8 @@ def make(cfg, rep):
   base = g.uniform(cfg.base_lo, cfg.base_hi, cfg.n_items)
   items = _slots(cfg, g)
   act = cfg.lam_buy / (1 - cfg.ret_ss)
-  dem = act * cfg.items_per_order / cfg.n_items * (cfg.qty_lo + cfg.qty_hi) / 2
+  lo, hi = qty_range(cfg)
+  dem = act * cfg.items_per_order / cfg.n_items * (lo + hi) / 2
   tot = round(cfg.cover * dem)
   cap = np.zeros(items.shape, int)
   for i in range(cfg.n_items):
@@ -88,6 +95,7 @@ def new_buy(cfg, inst, g, n):
   for _ in range(n):
     it = np.zeros(cfg.n_items, bool)
     it[g.choice(cfg.n_items, cfg.items_per_order, replace=False)] = True
-    qty = g.integers(cfg.qty_lo, cfg.qty_hi + 1, cfg.n_items) * it
+    lo, hi = qty_range(cfg)
+    qty = g.integers(lo, hi + 1, cfg.n_items) * it
     out.append(Prof(it, qty, inst.base * g.uniform(cfg.markup_lo, cfg.markup_hi) * it))
   return out

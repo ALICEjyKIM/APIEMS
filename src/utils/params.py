@@ -25,6 +25,8 @@ class Cfg:
   lam_buy: float = 4.0
   qty_lo: int = 2
   qty_hi: int = 5
+  qty_unit: int = 3  # 수량 단위 배수 (공급용량도 같은 비율로 커짐)
+  k_ref: int = 2  # 품목당 수량 범위 [qty_lo, qty_hi] × qty_unit이 적용되는 기준 주문당 품목 수
   markup_lo: float = 1.1
   markup_hi: float = 1.5
   # 공급자

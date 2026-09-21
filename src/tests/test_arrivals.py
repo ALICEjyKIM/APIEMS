@@ -6,19 +6,20 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from utils.params import Cfg
-from utils.instance import make, new_buy
+from utils.instance import make, new_buy, qty_range
 from utils.arrivals import new_buyers, new_sups, perturb
 from utils.common import rng, ret_u
 
 
-# 재참여율 ret_ss로 쌓인 안정 상태 활동 주문자의 수요를 품목별 총 공급용량이 약 cover배로 감당한다
-def test_supply_covers_steady_demand():
-  cfg = Cfg()
+# 재참여율 ret_ss로 쌓인 안정 상태 활동 주문자의 수요를 품목별 총 공급용량이 약 cover배로 감당한다 (주문당 품목 수와 무관)
+@pytest.mark.parametrize("k", [1, 2, 3])
+def test_supply_covers_steady_demand(k):
+  cfg = replace(Cfg(), items_per_order=k)
   inst = make(cfg, 0)
   act, dem, burn, n = [], np.zeros(cfg.n_items), 50, 400
   for t in range(burn + n):
     act = [(i, b) for i, b in act if ret_u(cfg, 0, "buy", i, t) < cfg.ret_ss]
-    act += [(t * 100 + k, b) for k, b in enumerate(new_buyers(cfg, inst, 0, t))]
+    act += [(t * 100 + m, b) for m, b in enumerate(new_buyers(cfg, inst, 0, t))]
     if t >= burn:
       dem += sum(b.qty for _, b in act)
   ratio = inst.sup_cap.sum(0) / (dem / n)
@@ -38,6 +39,17 @@ def test_conc_keeps_market_totals():
       a, b = new_buyers(cfg, inst, 0, t), new_buyers(cfg, insts[0], 0, t)
       assert [p.qty.tolist() for p in a] == [p.qty.tolist() for p in b]
       assert [p.price.tolist() for p in a] == [p.price.tolist() for p in b]
+
+
+# 주문당 품목 수만 바꾸면 공급자 수, 공급자별 공급 품목, 품목별 총 공급용량, 기간당 신규 주문자 수가 같다
+def test_items_per_order_keeps_supply():
+  cfgs = [replace(Cfg(), items_per_order=k) for k in (1, 2, 3)]
+  insts = [make(c, 0) for c in cfgs]
+  for c, inst in zip(cfgs, insts):
+    assert len(inst.sups) == len(insts[0].sups)
+    assert np.array_equal(inst.sup_items, insts[0].sup_items)
+    assert np.array_equal(inst.sup_cap.sum(0), insts[0].sup_cap.sum(0))
+    assert [len(new_buyers(c, inst, 0, t)) for t in range(10)] == [len(new_buyers(cfgs[0], insts[0], 0, t)) for t in range(10)]
 
 
 # 공급 편중도 0이면 모든 공급자의 품목 수가 같다
@@ -86,7 +98,8 @@ def test_items_per_order(k):
   assert len(bs) > 0
   for b in bs:
     assert b.items.sum() == k
-    assert (b.qty[b.items] >= cfg.qty_lo).all() and (b.qty[~b.items] == 0).all()
+    lo, hi = qty_range(cfg)
+    assert ((b.qty[b.items] >= lo) & (b.qty[b.items] <= hi)).all() and (b.qty[~b.items] == 0).all()
     assert (b.price[b.items] > 0).all()
 
 
