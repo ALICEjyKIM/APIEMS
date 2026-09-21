@@ -1,0 +1,17 @@
+# 파이썬 산출물
+__pycache__/
+*.pyc
+
+# 대용량 실험 결과 (요약·그림만 올림)
+src/result/runs/*.json
+
+# 루프 상태 (로컬 전용)
+auto_improvement/context/
+
+# 비밀 정보
+gurobi.lic
+.env
+
+# 기타
+.vscode/
+*.log
