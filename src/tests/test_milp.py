@@ -115,15 +115,15 @@ def test_retention_value_hand(kind, c):
   assert pol.obj == pytest.approx(75 + val.max())
 
 
-# 유지 가치가 클수록 잉여를 더 준다
+# 유지 가치가 클수록 잉여를 더 준다: 0에서 시작해 단조 비감소, 꺾인 점을 따라 계단형으로 올라 세 단계 이상을 거친다
 @pytest.mark.parametrize("kind", ["buy", "sup"])
 def test_retention_value_monotone(kind):
   s = []
-  for c in (0.0, 50.0, 100.0, 300.0):
+  for c in (0.0, 10.0, 30.0, 100.0, 300.0, 1000.0):
     pol = Policy(CFG, coef=lambda o: (np.array([c * (kind == "buy")]), np.array([c * (kind == "sup")])))
     x, u, v = pol.act(one_obs())
-    s.append((u if kind == "buy" else v)[0])
-  assert s[0] == 0 and (np.diff(s) >= -1e-9).all() and s[-1] > s[1] > 0
+    s.append(round(float((u if kind == "buy" else v)[0]), 4))
+  assert s[0] == 0 and (np.diff(s) >= 0).all() and s[-1] > 0 and len(set(s)) >= 3
 
 
 # 유지 가치 0 정책(구간선형 항 포함)의 결정은 근시안과 매 기간 같다 (계수 0 = 근시안)

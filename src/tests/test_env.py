@@ -174,16 +174,15 @@ def test_supplier_refill():
   assert left > 0
 
 
-# 공급자가 모두 떠나 빈 기간도 정산된다 (p_sup_new = 0)
+# 공급자가 하나도 없는 기간도 정산된다 (모두 떠나고 빈자리가 아직 안 채워진 상태를 직접 만든다. p_sup_new = 0은 용량 공식의 정의역 밖)
 def test_all_suppliers_gone():
-  cfg = replace(CFG, p_sup_new=0.0)
-  env, pol = Env(cfg, 0), Policy(cfg)
+  env, pol = Env(CFG, 0), Policy(CFG)
   env.reset()
-  for _ in range(cfg.T):
-    env.step(pol.act(env.o))
-  assert len(env.o.sid) == 0
+  env.sups, env.offs = {}, {}
+  env._arrive()
+  assert len(env.o.sid) == 0 and len(env.o.bid) > 0
   r = env.step(pol.act(env.o))
-  assert r["n_ok"] == 0 and r["profit"] == 0
+  assert r["n_ok"] == 0 and r["profit"] == 0 and r["n_sup"] == 0
 
 
 # 공통 난수: 결정이 달라도 신규 주문자와, 양쪽에 모두 남은 참여자의 다음 주문·공급은 같다

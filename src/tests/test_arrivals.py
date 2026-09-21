@@ -6,12 +6,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from utils.params import Cfg
-from utils.instance import make, new_buy, qty_range
+from utils.instance import make, new_buy, qty_range, sup_occ
 from utils.arrivals import new_buyers, new_sups, perturb
 from utils.common import rng, ret_u
 
 
-# 재참여율 ret_ss로 쌓인 안정 상태 활동 주문자의 수요를 품목별 총 공급용량이 약 cover배로 감당한다 (주문당 품목 수와 무관)
+# 재참여율 ret_ss로 쌓인 안정 상태 활동 주문자의 수요를 기대 실효 공급(품목별 총 공급용량 × 공급자 기대 점유율)이 약 cover배로 감당한다 (k와 무관)
 @pytest.mark.parametrize("k", [1, 2, 3])
 def test_supply_covers_steady_demand(k):
   cfg = replace(Cfg(), items_per_order=k)
@@ -22,7 +22,7 @@ def test_supply_covers_steady_demand(k):
     act += [(t * 100 + m, b) for m, b in enumerate(new_buyers(cfg, inst, 0, t))]
     if t >= burn:
       dem += sum(b.qty for _, b in act)
-  ratio = inst.sup_cap.sum(0) / (dem / n)
+  ratio = inst.sup_cap.sum(0) * sup_occ(cfg) / (dem / n)
   assert (ratio > 1).all()
   assert abs(ratio.mean() - cfg.cover) < 0.2
 
