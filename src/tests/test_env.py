@@ -1,11 +1,14 @@
-"""환경 정산과 기간 전이 테스트 (슬라이스 1).
+"""환경 정산, 기간 전이, rollout 테스트 (슬라이스 1).
 손으로 계산 가능한 작은 시장에서 주문 성립 조건, 분할 공급, 용량 검사, 이윤 구성요소를 확인한다.
-기간 전이는 공통 난수(결정과 무관한 다음 기간 시장)와 참여 규칙(주문자 1기간, 공급자 유지)을 확인한다.
+기간 전이는 공통 난수와 참여 규칙(주문자 1기간, 공급자 유지)을, rollout은 성과 지표 집계를 확인한다.
 """
+from dataclasses import replace
 import numpy as np
 import pytest
 from utils.params import Cfg
 from env.platform import Obs, Env, settle
+from match.milp_solve import Policy
+from match.interface import rollout
 
 CFG = Cfg()
 SH = 1 - CFG.sh_buy - CFG.sh_sup
@@ -109,3 +112,27 @@ def test_transition_common_random():
     for k in ("q", "p", "cap", "c"):
       assert np.array_equal(getattr(a.o, k), getattr(b.o, k))
     assert a.o.bid == b.o.bid and a.o.sid == b.o.sid
+
+
+# rollout: 누적 이윤 = 수익 − 배송비, 주문 충족률 = 성립 주문 / 전체 주문, 유지율(주문자 0, 공급자 1: 재참여 반응 전)
+@pytest.mark.parametrize("k", [1, 2, 3])
+def test_rollout_metrics(k):
+  cfg = replace(CFG, items_per_order=k)
+  env, pol = Env(cfg, 0), Policy(cfg)
+  env.reset()
+  pol.reset(0)
+  rs = [env.step(pol.act(env.o)) for _ in range(cfg.T)]
+  out = rollout(cfg, Policy(cfg), 0)
+  assert out["profit"] == pytest.approx(sum(r["profit"] for r in rs))
+  assert out["profit"] == pytest.approx(out["rev"] - out["ship"])
+  assert out["opp"] == pytest.approx(sum(r["opp"] for r in rs))
+  assert out["fill"] == pytest.approx(sum(r["n_ok"] for r in rs) / sum(r["n_buy"] for r in rs))
+  assert 0 < out["fill"] <= 1
+  assert out["ret_buy"] == 0 and out["ret_sup"] == 1
+
+
+# 같은 rep면 같은 결과, 다른 rep면 다른 결과
+def test_rollout_reproducible():
+  a, b, c = (rollout(CFG, Policy(CFG), rep) for rep in (0, 0, 1))
+  assert a == b
+  assert a["profit"] != c["profit"]
