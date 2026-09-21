@@ -10,6 +10,7 @@ from env.platform import Env
 from match.interface import rollout
 from bench.myopic import myopic
 from bench.rule_split import rule, scores, best
+from bench.tune import ret_rate
 
 CFG = Cfg()
 
@@ -47,12 +48,29 @@ def test_baselines_run():
     assert np.mean([o[k] for o in b]) > np.mean([o[k] for o in a])
 
 
-# 튜닝: 후보마다 튜닝용 seed의 같은 반복으로 평균 누적 이윤을 재고, 최선값은 그 최댓값의 후보
+# 튜닝: 후보별 튜닝용 seed의 같은 반복으로 누적 이윤을 재고, 기본값보다 유의하게 큰 후보가 있을 때만 바꾼다
+# 공급자 몫 0.7은 플랫폼 몫이 0이라 주문을 모두 거절해 이윤 0: 기본값 0.3이면 유지, 기본값 0.7이면 0.3으로 바뀐다
 def test_best_split():
-  cfg = replace(CFG, T=8, n_tune=2)
+  cfg = replace(CFG, T=8, n_tune=4, sh_sup_grid=(0.3, 0.7))
   sc = scores(cfg)
-  assert set(sc) == set(cfg.sh_sup_grid)
-  assert sc[best(cfg)] == max(sc.values())
+  assert set(sc) == set(cfg.sh_sup_grid) and len(sc[0.3]) == cfg.n_tune
   tc = replace(cfg, seed=cfg.tune_seed)
-  assert sc[0.2] == pytest.approx(np.mean([rollout(tc, rule(tc, 0.2), rep)["profit"] for rep in range(2)]))
-  assert sc != scores(replace(cfg, tune_seed=cfg.tune_seed + 1))
+  assert sc[0.3] == pytest.approx([rollout(tc, rule(tc, 0.3), rep)["profit"] for rep in range(cfg.n_tune)])
+  assert (sc[0.7] == 0).all() and (sc[0.3] > 0).all()
+  assert best(cfg) == 0.3
+  assert best(replace(cfg, sh_sup=0.7)) == 0.3
+  assert not np.array_equal(sc[0.3], scores(replace(cfg, tune_seed=cfg.tune_seed + 1))[0.3])
+
+
+# 보정 결과: 규칙 기반(Cfg.sh_sup)으로 튜닝용 반복을 돌리면 주문자·공급자 재참여율이 ret_ss ± 0.03
+def test_calibrated_retention():
+  rb, rs = ret_rate(CFG)
+  assert rb == pytest.approx(CFG.ret_ss, abs=0.03)
+  assert rs == pytest.approx(CFG.ret_ss, abs=0.03)
+
+
+# 이분탐색은 기울기를 올리면 재참여율이 오르는 성질을 쓴다 (소규모 설정으로 확인)
+def test_slope_monotone():
+  cfg = replace(CFG, T=8, n_tune=2)
+  lo, hi = ret_rate(replace(cfg, b_buy=5.0, b_sup=5.0)), ret_rate(replace(cfg, b_buy=100.0, b_sup=100.0))
+  assert lo[0] < hi[0] and lo[1] < hi[1]

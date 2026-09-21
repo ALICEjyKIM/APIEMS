@@ -41,10 +41,11 @@ class Cfg:
   # 재참여 변동
   noise_qty: float = 0.1
   noise_price: float = 0.05
-  # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱, 잉여 0이면 ret_p0, 기울기는 bench/tune.py로 보정
+  # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱, 잉여 0이면 ret_p0
+  # 기울기는 bench/tune.py 보정값: 기본 시장에서 규칙 기반(공급자 몫 0.3) 재참여율이 주문자 0.488, 공급자 0.504 (목표 ret_ss 0.5)
   ret_p0: float = 0.1
-  b_buy: float = 30.0
-  b_sup: float = 30.0
+  b_buy: float = 39.55078125
+  b_sup: float = 24.70703125
   # 재참여확률 구간선형 근사: 잉여율 0 ~ 확률 pwl_hi 지점 등간격 pwl_n점 + 잉여율 pwl_rmax 끝점
   pwl_n: int = 5
   pwl_hi: float = 0.97
@@ -56,7 +57,9 @@ class Cfg:
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
-  # 반응 기울기 보정 (bench/tune.py): [0, cal_hi] 이분탐색 cal_iter회, 주문자·공급자 교대 cal_alt회, 최선 몫 재튜닝 최대 cal_rounds회
+  # 반응 기울기 보정 (bench/tune.py): 시작 기울기 cal_init(경로 의존 제거), [0, cal_hi] 이분탐색 cal_iter회,
+  # 주문자·공급자 교대 cal_alt회, 최선 몫 재튜닝 최대 cal_rounds회
+  cal_init: float = 30.0
   cal_hi: float = 200.0
   cal_iter: int = 10
   cal_alt: int = 2
