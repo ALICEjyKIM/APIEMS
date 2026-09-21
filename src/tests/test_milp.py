@@ -6,7 +6,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from utils.params import Cfg
-from env.platform import Obs, Env, settle
+from env.platform import Obs, Env, settle, worth
 from match.milp_solve import Policy
 from env.response import Logistic
 from utils.pwl import points
@@ -91,3 +91,63 @@ def test_pwl_close(b, kind):
   assert p[0] == pytest.approx(cfg.ret_p0)
   g = np.linspace(0, cfg.pwl_rmax, 20001)
   assert np.abs(np.interp(g, r, p) - f.prob(kind, g, 1.0)).max() <= 0.03
+
+
+# 주문자 1명(품목 0을 10개, 제안가격 20), 공급자 1명(10개, 가격 10): 마진 100, 성립 시 플랫폼 몫 여유 75
+def one_obs():
+  return Obs(0, np.array([[10]]), np.array([[20.0]]), np.array([[10]]), np.array([[10.0]]), [0], [0])
+
+
+# 유지 가치 c를 한 종류에만 주면 그 종류의 잉여 s는 꺾인 점 전수 탐색 argmax(−s + c·PWL(s)) (s ≤ 75), 다른 종류는 0
+@pytest.mark.parametrize("kind", ["buy", "sup"])
+@pytest.mark.parametrize("c", [0.0, 50.0, 100.0, 300.0])
+def test_retention_value_hand(kind, c):
+  o, f = one_obs(), Logistic(CFG)
+  w = worth(o)[kind == "sup"][0]
+  r, p = points(CFG, f, kind)
+  cand = np.r_[w * r[w * r <= 75], 75.0]
+  val = -cand + c * np.interp(cand, w * r, p)
+  pol = Policy(CFG, coef=lambda o: (np.array([c * (kind == "buy")]), np.array([c * (kind == "sup")])))
+  x, u, v = pol.act(o)
+  s, other = (u, v) if kind == "buy" else (v, u)
+  assert x.tolist() == [[[10]]]
+  assert s[0] == pytest.approx(cand[np.argmax(val)], abs=1e-6) and other[0] == pytest.approx(0, abs=1e-6)
+  assert pol.obj == pytest.approx(75 + val.max())
+
+
+# 유지 가치가 클수록 잉여를 더 준다
+@pytest.mark.parametrize("kind", ["buy", "sup"])
+def test_retention_value_monotone(kind):
+  s = []
+  for c in (0.0, 50.0, 100.0, 300.0):
+    pol = Policy(CFG, coef=lambda o: (np.array([c * (kind == "buy")]), np.array([c * (kind == "sup")])))
+    x, u, v = pol.act(one_obs())
+    s.append((u if kind == "buy" else v)[0])
+  assert s[0] == 0 and (np.diff(s) >= -1e-9).all() and s[-1] > s[1] > 0
+
+
+# 유지 가치 0 정책(구간선형 항 포함)의 결정은 근시안과 매 기간 같다 (계수 0 = 근시안)
+# 마진 합은 공급자·품목별 총 공급량에만 달려 같은 공급자 물량을 어느 주문자에게 보내는지는 대체 최적해가 있으므로,
+# 목적함수·성립 주문·공급자별 품목 공급량·잉여·다음 기간 시장을 비교한다
+def test_zero_coef_equals_myopic():
+  a, b = Env(CFG, 0), Env(CFG, 0)
+  a.reset(), b.reset()
+  pa, pb = Policy(CFG), Policy(CFG, coef=lambda o: (np.zeros(len(o.bid)), np.zeros(len(o.sid))))
+  for _ in range(CFG.T):
+    da, db = pa.act(a.o), pb.act(b.o)
+    assert pa.obj == pytest.approx(pb.obj)
+    assert np.array_equal(da[0].sum(0), db[0].sum(0)) and np.allclose(da[1], db[1]) and np.allclose(da[2], db[2])
+    ra, rb = a.step(da), b.step(db)
+    assert np.array_equal(ra["ok"], rb["ok"])
+    assert a.o.bid == b.o.bid and a.o.sid == b.o.sid and np.array_equal(a.o.q, b.o.q)
+
+
+# 모든 참여자에게 양의 유지 가치를 주면 모든 기간 최적해이고 결정이 환경 검사를 통과하며 잉여를 준다
+def test_retention_value_rollout():
+  env, sb = Env(CFG, 0), 0.0
+  pol = Policy(CFG, coef=lambda o: (np.full(len(o.bid), 100.0), np.full(len(o.sid), 100.0)))
+  env.reset()
+  for _ in range(CFG.T):
+    r = env.step(pol.act(env.o))
+    sb += r["sb"].sum() + r["ss"].sum()
+  assert sb > 0
