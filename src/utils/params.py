@@ -22,7 +22,7 @@ class Cfg:
   n_alt: int = 2
   items_per_order: int = 2
   # 주문자
-  lam_buy: float = 10.0  # 기간당 신규 주문자 수 평균. 품목별 총 공급용량도 같은 비율로 커져 k = 1 주문 한 건(평균 21)이 용량(182)의 1/4 이하
+  lam_buy: float = 10.0  # 기간당 신규 주문자 수 평균. 품목별 총 공급용량도 같은 비율로 커져 k = 1 주문 한 건(평균 21)이 용량(273)의 1/4 이하
   qty_lo: int = 2
   qty_hi: int = 5
   qty_unit: int = 3  # 수량 단위 배수 (공급용량도 같은 비율로 커짐)
@@ -34,7 +34,7 @@ class Cfg:
   cost_hi: float = 1.1
   cover: float = 1.3  # 기대 실효 공급(품목별 총 공급용량 × 공급자 기대 점유율) / 안정 상태 수요
   ret_ss: float = 0.5
-  p_sup_new: float = 0.5  # 빈 공급자 자리 충원 확률. 1이면 공급자를 잃는 손해가 사라져 공급자 유지 가치가 의미를 잃으므로 0.5 유지
+  p_sup_new: float = 0.25  # 빈 공급자 자리 충원 확률 (빈자리 평균 4기간). 새 공급자 검증·계약·등록에 시간이 걸리고, 충원이 빠르면 공급자를 잃는 손해가 없어 유지 가치가 의미를 잃는다
   # 품목
   base_lo: float = 10.0
   base_hi: float = 20.0
@@ -42,27 +42,24 @@ class Cfg:
   noise_qty: float = 0.1
   noise_price: float = 0.05
   # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱, 잉여 0이면 ret_p0
-  # 기울기는 bench/tune.py 보정값 (용량 182, T 30): 기본 시장에서 규칙 기반(공급자 몫 0.3) 재참여율이 주문자 0.501, 공급자 0.470 (목표 ret_ss 0.5)
+  # 기울기는 bench/tune.py 보정값: 기준 몫 sh_ref로 마진의 30%를 받을 때의 평균 잉여율(기준 잉여율)에서 재참여율이 ret_ss가 되는 닫힌 식
   ret_p0: float = 0.1
-  b_buy: float = 31.73828125
-  b_sup: float = 35.25390625
+  b_buy: float = np.float64(23.037167650031904)
+  b_sup: float = np.float64(58.38406871172898)
   # 재참여확률 구간선형 근사: 잉여율 0 ~ 확률 pwl_hi 지점 등간격 pwl_n점 + 잉여율 pwl_rmax 끝점
   pwl_n: int = 5
   pwl_hi: float = 0.97
   pwl_rmax: float = 1.0
-  # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫). 규칙 기반은 공급자 몫을 후보 중 튜닝(sh_sup = 기본 시장 최선값)
+  # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫). sh_ref = 사전 기준 몫(주문자, 공급자): 반응 보정의 기준 잉여율과 규칙 기반 튜닝의 비교 기준.
+  # sh_buy·sh_sup = 규칙 기반이 쓰는 몫 (기본 시장 튜닝 결과)
+  sh_ref: tuple = (0.3, 0.3)
   sh_buy: float = 0.3
   sh_sup: float = 0.3
   sh_sup_grid: tuple = (0.1, 0.2, 0.3, 0.4)
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
-  # 반응 기울기 보정 (bench/tune.py): 시작 기울기 cal_init(경로 의존 제거), [0, cal_hi] 이분탐색 cal_iter회,
-  # 주문자·공급자 교대 cal_alt회, 최선 몫 재튜닝 최대 cal_rounds회
-  cal_init: float = 30.0
-  cal_hi: float = 200.0
-  cal_iter: int = 10
-  cal_alt: int = 2
+  # 반응 기울기 보정 (bench/tune.py): 기준 잉여율 측정 → 기울기 설정을 cal_rounds회 반복
   cal_rounds: int = 3
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0

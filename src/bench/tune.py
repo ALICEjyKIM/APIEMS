@@ -1,46 +1,49 @@
-"""반응 함수 기울기 보정 (이분탐색).
-규칙 기반 정책(최선 공급자 몫)으로 튜닝용 반복을 돌렸을 때 주문자·공급자 재참여율이 ret_ss가 되도록 b_buy, b_sup를 맞춘다.
-최선 공급자 몫이 보정에 따라 바뀔 수 있어 "보정 → 최선 몫 재튜닝"을 몫이 바뀌지 않을 때까지 반복한다.
+"""반응 함수 기울기 보정.
+기준 잉여율(기준 몫 sh_ref, 즉 마진의 30%를 받을 때 잉여를 받은 참여자의 평균 잉여율)에서 재참여율이 ret_ss가 되도록 b_buy, b_sup를 닫힌 식으로 정한다.
+기준 잉여율은 튜닝용 반복에서 재며, 측정이 기울기(참여자 구성)에 조금 의존하므로 측정 → 설정을 cal_rounds회 반복한다.
 """
 from dataclasses import replace
 import numpy as np
+from env.platform import Env, worth
 from match.interface import rollout
-from bench.rule_split import rule, best
+from bench.rule_split import rule
+from match.milp_solve import Policy
 
 
-# 규칙 기반(Cfg.sh_sup) 튜닝용 반복의 평균 재참여율 (주문자, 공급자)
-def ret_rate(cfg):
+# 몫 split(None이면 Cfg의 몫)의 규칙 기반 튜닝용 반복 평균 재참여율 (주문자, 공급자)
+def ret_rate(cfg, split=None):
   tc = replace(cfg, seed=cfg.tune_seed)
-  outs = [rollout(tc, rule(tc), rep) for rep in range(cfg.n_tune)]
+  outs = [rollout(tc, Policy(tc, split=split) if split else rule(tc), rep) for rep in range(cfg.n_tune)]
   return np.mean([o["ret_buy"] for o in outs]), np.mean([o["ret_sup"] for o in outs])
 
 
-# 종류 kind의 기울기를 [0, cal_hi]에서 이분탐색해 재참여율을 ret_ss에 맞춘다 (다른 종류 기울기는 고정)
-def fit(cfg, kind):
-  lo, hi, key = 0.0, cfg.cal_hi, "b_" + kind
-  for _ in range(cfg.cal_iter):
-    mid = (lo + hi) / 2
-    lo, hi = (mid, hi) if ret_rate(replace(cfg, **{key: mid}))[kind == "sup"] < cfg.ret_ss else (lo, mid)
-  return replace(cfg, **{key: (lo + hi) / 2})
+# 기준 잉여율: 기준 몫 sh_ref로 운영한 튜닝용 반복에서 잉여를 받은 참여자의 잉여율(배분 잉여 / 제안 금액) 평균 (주문자, 공급자)
+def ref_rate(cfg):
+  tc = replace(cfg, seed=cfg.tune_seed)
+  rb, rs = [], []
+  for rep in range(cfg.n_tune):
+    env, pol = Env(tc, rep), Policy(tc, split=cfg.sh_ref)
+    env.reset()
+    for _ in range(tc.T):
+      wb, ws = worth(env.o)
+      r = env.step(pol.act(env.o))
+      rb += list(r["sb"][r["sb"] > 0] / wb[r["sb"] > 0])
+      rs += list(r["ss"][r["ss"] > 0] / ws[r["ss"] > 0])
+  return np.mean(rb), np.mean(rs)
 
 
-# 보정: 기울기를 cal_init에서 시작해 교대 이분탐색 → 최선 공급자 몫 재튜닝, 몫이 바뀌지 않으면 끝
-# cal_rounds회 안에 수렴하지 않으면 마지막 몫으로 기울기만 한 번 더 맞춰 (기울기, 몫)이 서로 맞는 설정을 돌려준다
+# 보정: 기울기 b = (logit(ret_ss) − logit(ret_p0)) / 기준 잉여율. 기준 잉여율을 새 기울기로 다시 재며 cal_rounds회 반복한다
 def calibrate(cfg):
-  cfg = replace(cfg, b_buy=cfg.cal_init, b_sup=cfg.cal_init)
-  for k in range(cfg.cal_rounds + 1):
-    for _ in range(cfg.cal_alt):
-      cfg = fit(fit(cfg, "buy"), "sup")
-    s = best(cfg) if k < cfg.cal_rounds else cfg.sh_sup
-    rb, rs = ret_rate(cfg)
-    print(f"round {k}: b_buy={cfg.b_buy!r} b_sup={cfg.b_sup!r} sh_sup={cfg.sh_sup} -> best {s}, ret=({rb:.4f}, {rs:.4f})", flush=True)
-    if s == cfg.sh_sup:
-      return cfg
-    cfg = replace(cfg, sh_sup=s)
+  k = np.log(cfg.ret_ss / (1 - cfg.ret_ss)) - np.log(cfg.ret_p0 / (1 - cfg.ret_p0))
+  for i in range(cfg.cal_rounds):
+    rb, rs = ref_rate(cfg)
+    cfg = replace(cfg, b_buy=k / rb, b_sup=k / rs)
+    print(f"round {i}: ref_rate=({rb:.5f}, {rs:.5f}) -> b_buy={cfg.b_buy!r} b_sup={cfg.b_sup!r}", flush=True)
+  return cfg
 
 
 if __name__ == "__main__":
   from utils.params import Cfg
   cfg = calibrate(Cfg())
-  rb, rs = ret_rate(cfg)
-  print(f"final: b_buy={cfg.b_buy!r} b_sup={cfg.b_sup!r} sh_sup={cfg.sh_sup} ret=({rb:.4f}, {rs:.4f})")
+  rb, rs = ret_rate(cfg, cfg.sh_ref)
+  print(f"final: b_buy={cfg.b_buy!r} b_sup={cfg.b_sup!r}; 기준 몫 {cfg.sh_ref} 운영 재참여율=({rb:.4f}, {rs:.4f})")

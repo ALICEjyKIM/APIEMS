@@ -10,7 +10,8 @@ from env.platform import Env
 from match.interface import rollout
 from bench.myopic import myopic
 from bench.rule_split import rule, scores, best
-from bench.tune import ret_rate
+from bench.tune import ret_rate, ref_rate
+from env.response import Logistic
 
 CFG = Cfg()
 
@@ -62,11 +63,12 @@ def test_best_split():
   assert not np.array_equal(sc[0.3], scores(replace(cfg, tune_seed=cfg.tune_seed + 1))[0.3])
 
 
-# 보정 결과: 규칙 기반(Cfg.sh_sup)으로 튜닝용 반복을 돌리면 주문자·공급자 재참여율이 ret_ss ± 0.03
-def test_calibrated_retention():
-  rb, rs = ret_rate(CFG)
-  assert rb == pytest.approx(CFG.ret_ss, abs=0.03)
-  assert rs == pytest.approx(CFG.ret_ss, abs=0.03)
+# 보정: Cfg 기울기는 기준 잉여율(기준 몫 sh_ref로 운영해 잉여를 받은 참여자의 평균 잉여율)에서 재참여율 ret_ss를 준다
+def test_calibrated_reference():
+  rb, rs = ref_rate(CFG)
+  f = Logistic(CFG)
+  assert f.prob("buy", rb, 1.0) == pytest.approx(CFG.ret_ss, abs=0.02)
+  assert f.prob("sup", rs, 1.0) == pytest.approx(CFG.ret_ss, abs=0.02)
 
 
 # 이분탐색은 기울기를 올리면 재참여율이 오르는 성질을 쓴다 (소규모 설정으로 확인)
