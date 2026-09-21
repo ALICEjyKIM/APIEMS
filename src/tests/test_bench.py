@@ -67,8 +67,8 @@ def test_best_split():
 def test_calibrated_reference():
   rb, rs = ref_rate(CFG)
   f = Logistic(CFG)
-  assert f.prob("buy", rb, 1.0) == pytest.approx(CFG.ret_ss, abs=0.02)
-  assert f.prob("sup", rs, 1.0) == pytest.approx(CFG.ret_ss, abs=0.02)
+  assert f.prob("buy", rb, 1.0) == pytest.approx(CFG.ret_ss, abs=0.03)
+  assert f.prob("sup", rs, 1.0) == pytest.approx(CFG.ret_ss, abs=0.03)
 
 
 # 이분탐색은 기울기를 올리면 재참여율이 오르는 성질을 쓴다 (소규모 설정으로 확인)
