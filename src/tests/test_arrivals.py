@@ -1,5 +1,5 @@
 """인스턴스 생성과 기간별 도착 테스트.
-시장 조건(다품목 공급자 비율, 대체 공급자 수, 주문당 품목 수)이 구조에 그대로 반영되는지 확인한다.
+시장 조건(공급 편중도, 대체 공급자 수, 주문당 품목 수)이 구조에 그대로 반영되는지 확인한다.
 공급이 평균 수요를 감당하는지, 재현성·공통 난수·재참여 변동 크기를 확인한다.
 """
 from dataclasses import replace
@@ -26,26 +26,55 @@ def test_supply_covers_steady_demand():
   assert abs(ratio.mean() - cfg.cover) < 0.2
 
 
-# 다품목 공급자 비율 0이면 모든 공급자가 1품목만 공급한다
-def test_multi_ratio_zero_single_item():
-  inst = make(replace(Cfg(), multi_ratio=0.0), 0)
-  assert (inst.sup_items.sum(1) == 1).all()
+# 공급 편중도를 바꿔도 공급자 수, 대체 공급자 수, 품목별 총 공급용량, 신규 주문(기대 수요)이 같다
+def test_conc_keeps_market_totals():
+  cfg = Cfg()
+  insts = [make(replace(cfg, conc=c), 0) for c in (0.0, 0.5, 1.0)]
+  for inst in insts:
+    assert len(inst.sups) == cfg.n_sup
+    assert (inst.sup_items.sum(0) == cfg.n_alt).all()
+    assert np.array_equal(inst.sup_cap.sum(0), insts[0].sup_cap.sum(0))
+    for t in range(10):
+      a, b = new_buyers(cfg, inst, 0, t), new_buyers(cfg, insts[0], 0, t)
+      assert [p.qty.tolist() for p in a] == [p.qty.tolist() for p in b]
+      assert [p.price.tolist() for p in a] == [p.price.tolist() for p in b]
 
 
-# 다품목 공급자 비율을 올리면 다품목 공급자 수가 늘어난다
-def test_multi_ratio_increases_multi_suppliers():
-  cnt = [(make(replace(Cfg(), multi_ratio=r), 0).sup_items.sum(1) > 1).sum() for r in (0.0, 0.3, 0.6)]
-  assert cnt[0] < cnt[1] < cnt[2]
-
-
-# 모든 품목의 대체 공급자 수가 n_alt와 같다
+# 공급 편중도 0이면 모든 공급자의 품목 수가 같다
 @pytest.mark.parametrize("n_alt", [1, 2, 3])
-@pytest.mark.parametrize("r", [0.0, 0.3, 0.6])
-def test_n_alt_per_item(n_alt, r):
-  inst = make(replace(Cfg(), n_alt=n_alt, multi_ratio=r), 0)
+def test_conc_zero_equal_degrees(n_alt):
+  d = make(replace(Cfg(), conc=0.0, n_alt=n_alt), 0).sup_items.sum(1)
+  assert (d == d[0]).all()
+
+
+# 공급 편중도를 올리면 공급자별 품목 수의 최댓값과 분산이 커진다
+@pytest.mark.parametrize("n_alt", [2, 3])
+def test_conc_increases_max_and_var(n_alt):
+  ds = [make(replace(Cfg(), conc=c, n_alt=n_alt), 0).sup_items.sum(1) for c in (0.0, 0.5, 1.0)]
+  assert ds[0].max() < ds[1].max() < ds[2].max()
+  assert ds[0].var() < ds[1].var() < ds[2].var()
+
+
+# 모든 품목의 대체 공급자 수가 n_alt, 모든 공급자가 1품목 이상, 연결에만 용량이 있다
+@pytest.mark.parametrize("n_alt", [1, 2, 3])
+@pytest.mark.parametrize("conc", [0.0, 0.5, 1.0])
+def test_structure_valid(n_alt, conc):
+  inst = make(replace(Cfg(), n_alt=n_alt, conc=conc), 0)
   assert (inst.sup_items.sum(0) == n_alt).all()
+  assert (inst.sup_items.sum(1) >= 1).all()
   assert (inst.sup_cap[~inst.sup_items] == 0).all()
   assert (inst.sup_cap[inst.sup_items] >= 1).all()
+
+
+# 떠난 공급자 자리는 같은 품목 조합과 공급가능량의 새 공급자로 채워진다
+def test_vacancy_refill_same_items():
+  cfg = replace(Cfg(), p_sup_new=1.0)
+  inst = make(cfg, 0)
+  new = new_sups(cfg, inst, 0, 3, range(cfg.n_sup))
+  assert set(new) == set(range(cfg.n_sup))
+  for j, p in new.items():
+    assert np.array_equal(p.items, inst.sup_items[j])
+    assert np.array_equal(p.qty, inst.sup_cap[j])
 
 
 # 모든 주문의 품목 수가 주문당 품목 수와 같다

@@ -1,5 +1,5 @@
 """주문자·공급자 프로필 생성.
-공급자 자리 구조는 시장 조건(다품목 공급자 비율, 대체 공급자 수)으로 정해지고 반복 내내 고정된다.
+공급자 수는 고정이고, 자리 구조는 시장 조건(공급 편중도, 대체 공급자 수)으로 정해져 반복 내내 유지된다.
 주문자 프로필은 주문당 품목 수만큼 품목을 고르고 품목별 수량과 제안가격 수준을 가진다.
 """
 from dataclasses import dataclass, field
@@ -30,20 +30,33 @@ class Inst:
   sups: list = field(default_factory=list)
 
 
-# 공급자 자리 구조: 품목마다 n_alt 자리, 서로 다른 품목 자리 둘을 합쳐 다품목 공급자를 만든다
+# 공급자별 품목 수: 균등 수열과 최대 편중 수열을 공급 편중도로 섞고 합이 연결 수가 되게 반올림
+def _degrees(cfg):
+  L, S, I = cfg.n_items * cfg.n_alt, cfg.n_sup, cfg.n_items
+  assert cfg.n_alt <= S <= L
+  eq = np.full(S, L // S)
+  eq[:L % S] += 1
+  mx, r = np.ones(S, int), L - S
+  for j in range(S):
+    k = min(I - 1, r)
+    mx[j] += k
+    r -= k
+  x = np.round((1 - cfg.conc) * eq + cfg.conc * mx, 9)
+  d = np.floor(x).astype(int)
+  d[np.argsort(-(x - d), kind="stable")[:L - d.sum()]] += 1
+  return d
+
+
+# 공급자 자리 구조: 품목 수가 많은 공급자부터 남은 필요 공급자 수가 큰 품목을 고른다 (Ryser 탐욕법)
 def _slots(cfg, g):
-  cnt = np.full(cfg.n_items, cfg.n_alt)
-  m = round(cfg.multi_ratio * cnt.sum() / (1 + cfg.multi_ratio))
-  sets = []
-  for _ in range(m):
-    a, b = np.lexsort((g.random(cfg.n_items), -cnt))[:2]
-    sets.append((a, b))
-    cnt[a] -= 1
-    cnt[b] -= 1
-  sets += [(i,) for i in range(cfg.n_items) for _ in range(cnt[i])]
-  items = np.zeros((len(sets), cfg.n_items), bool)
-  for j, s in enumerate(sets):
-    items[j, list(s)] = True
+  d = _degrees(cfg)
+  need = np.full(cfg.n_items, cfg.n_alt)
+  items = np.zeros((cfg.n_sup, cfg.n_items), bool)
+  for j in np.argsort(-d, kind="stable"):
+    pick = np.lexsort((g.random(cfg.n_items), -need))[:d[j]]
+    items[j, pick] = True
+    need[pick] -= 1
+  assert (need == 0).all()
   return items
 
 
@@ -54,11 +67,11 @@ def make(cfg, rep):
   items = _slots(cfg, g)
   act = cfg.lam_buy / (1 - cfg.ret_ss)
   dem = act * cfg.items_per_order / cfg.n_items * (cfg.qty_lo + cfg.qty_hi) / 2
-  cap = np.zeros(items.shape)
+  tot = round(cfg.cover * dem)
+  cap = np.zeros(items.shape, int)
   for i in range(cfg.n_items):
-    js = np.flatnonzero(items[:, i])
-    cap[js, i] = np.maximum(1, np.round(cfg.cover * dem * g.dirichlet(np.ones(len(js)))))
-  inst = Inst(base, items, cap.astype(int))
+    cap[items[:, i], i] = 1 + g.multinomial(tot - cfg.n_alt, g.dirichlet(np.ones(cfg.n_alt)))
+  inst = Inst(base, items, cap)
   inst.sups = [new_sup(cfg, inst, g, j) for j in range(len(items))]
   return inst
 

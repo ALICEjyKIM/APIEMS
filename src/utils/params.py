@@ -1,6 +1,6 @@
 """실험 설정을 한곳에 모은 frozen Cfg.
 소규모 예비 실험의 규모, 시장 조건, 주문자·공급자 생성 범위를 담는다.
-시장 조건을 바꿀 때는 dataclasses.replace(cfg, multi_ratio=...)를 쓴다.
+시장 조건을 바꿀 때는 dataclasses.replace(cfg, conc=...)를 쓴다.
 """
 from dataclasses import dataclass
 
@@ -13,11 +13,12 @@ class Cfg:
   """
   # 규모
   seed: int = 0
-  n_items: int = 5
+  n_items: int = 6
+  n_sup: int = 6
   T: int = 25
   reps: int = 10
   # 시장 조건
-  multi_ratio: float = 0.3
+  conc: float = 0.5
   n_alt: int = 2
   items_per_order: int = 2
   # 주문자

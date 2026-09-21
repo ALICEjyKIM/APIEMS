@@ -18,12 +18,12 @@ def test_cfg_frozen():
 # 규모와 시장 조건 기본값이 예비 실험 범위 안에 있다
 def test_cfg_scale():
   cfg = Cfg()
-  assert 5 <= cfg.n_items <= 6
+  assert (cfg.n_items, cfg.n_sup, cfg.n_alt) == (6, 6, 2)
   assert 2 <= cfg.items_per_order <= 3
   assert 20 <= cfg.T <= 30
   assert 10 <= cfg.reps <= 20
-  assert 0 <= cfg.multi_ratio < 1
-  assert cfg.n_alt >= 1
+  assert 0 <= cfg.conc <= 1
+  assert cfg.n_alt <= cfg.n_sup <= cfg.n_items * cfg.n_alt
 
 
 # 같은 키는 같은 난수, 반복·스트림·키가 다르면 다른 난수
