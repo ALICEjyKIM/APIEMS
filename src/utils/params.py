@@ -41,3 +41,8 @@ class Cfg:
   # 재참여 변동
   noise_qty: float = 0.1
   noise_price: float = 0.05
+  # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫)
+  sh_buy: float = 0.3
+  sh_sup: float = 0.3
+  # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
+  f_ship: float = 25.0
