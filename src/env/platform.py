@@ -28,18 +28,22 @@ def _mat(profs, n):
   return np.array([p.qty for p in profs], int).reshape(-1, n), np.array([p.price for p in profs], float).reshape(-1, n)
 
 
-# 배정 x[b,j,i]를 검사하고 정산: 모든 품목 요구수량이 채워진 주문만 성립, 한 품목을 여러 공급자가 나눠 채워도 된다
-def settle(cfg, o, x):
+# 결정 (배정 x[b,j,i], 주문자 잉여 sb, 공급자 잉여 ss)을 검사하고 정산한다
+# 모든 품목 요구수량이 채워진 주문만 성립(한 품목을 여러 공급자가 나눠 채워도 됨), 잉여는 자기 거래 마진 이내, 플랫폼 이윤 ≥ 0
+def settle(cfg, o, dec):
+  x, sb, ss = dec
   assert np.issubdtype(x.dtype, np.integer) and x.shape == (len(o.q), len(o.cap), o.q.shape[1])
   assert (x >= 0).all() and (x.sum(0) <= o.cap).all()
   ok = (x.sum(1) == o.q).all(1)
   m = (o.p[:, None] - o.c[None]) * x * ok[:, None, None]
-  sh = 1 - cfg.sh_buy - cfg.sh_sup
-  rev, ship = sh * m.sum(), cfg.f_ship * ok.sum()
+  g, mj = m.sum((1, 2)), m.sum((0, 2))
+  assert sb.shape == g.shape and (sb >= -cfg.tol).all() and (sb <= g + cfg.tol).all()
+  assert ss.shape == mj.shape and (ss >= -cfg.tol).all() and (ss <= mj + cfg.tol).all()
+  rev, ship = m.sum() - sb.sum() - ss.sum(), cfg.f_ship * ok.sum()
+  assert rev - ship >= -cfg.tol
   cmin = np.where(o.cap > 0, o.c, np.inf).min(0)
-  pot = sh * (o.q * np.where(o.q > 0, o.p - cmin, 0)).sum(1) - cfg.f_ship
-  return dict(ok=ok, n_ok=ok.sum(), rev=rev, ship=ship, profit=rev - ship, opp=np.maximum(pot, 0)[~ok].sum(),
-              sb=cfg.sh_buy * m.sum((1, 2)), ss=cfg.sh_sup * m.sum((0, 2)))
+  pot = (o.q * np.where(o.q > 0, o.p - cmin, 0)).sum(1) - cfg.f_ship
+  return dict(ok=ok, n_ok=ok.sum(), rev=rev, ship=ship, profit=rev - ship, opp=np.maximum(pot, 0)[~ok].sum(), sb=sb, ss=ss)
 
 
 class Env:
@@ -69,10 +73,10 @@ class Env:
     cap, c = _mat(self.off.values(), self.cfg.n_items)
     self.o = Obs(self.t, q, p, cap, c, list(self.ords), list(self.off))
 
-  # 배정 x를 정산하고 다음 기간으로: 주문자는 떠나고, 공급자는 남아 프로필에 변동을 더해 공급한다
-  def step(self, x):
+  # 결정을 정산하고 다음 기간으로: 주문자는 떠나고, 공급자는 남아 프로필에 변동을 더해 공급한다
+  def step(self, dec):
     o = self.o
-    r = settle(self.cfg, o, x)
+    r = settle(self.cfg, o, dec)
     self.t += 1
     self.off = {j: perturb(self.cfg, self.rep, "sup", j, self.t, s) for j, s in self.sups.items()}
     self._arrive()

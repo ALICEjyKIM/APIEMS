@@ -29,9 +29,14 @@ def bundle_obs():
   return Obs(0, q, p, cap, c, [0], [0])
 
 
+# 분할 공급 결정(6개·4개)과 고정 비율 잉여: 주문 마진 92, 공급자별 마진 60·32
+X_SPLIT = np.array([[[6, 0], [4, 0]]])
+SB_RULE, SS_RULE = np.array([CFG.sh_buy * 92]), np.array([CFG.sh_sup * 60, CFG.sh_sup * 32])
+
+
 # 한 품목을 두 공급자가 6개·4개로 나눠 채우면 주문이 성립하고 이윤을 손으로 계산한 값과 같다
 def test_split_supply_fulfills():
-  r = settle(CFG, split_obs(), np.array([[[6, 0], [4, 0]]]))
+  r = settle(CFG, split_obs(), (X_SPLIT, SB_RULE, SS_RULE))
   gross = 10 * 6 + 8 * 4
   assert r["ok"].tolist() == [True] and r["n_ok"] == 1
   assert r["rev"] == pytest.approx(SH * gross)
@@ -42,26 +47,28 @@ def test_split_supply_fulfills():
   assert r["ss"] == pytest.approx([CFG.sh_sup * 60, CFG.sh_sup * 32])
 
 
-# 배분 잉여(주문자 + 공급자 + 플랫폼 이윤)의 합 = 거래잉여(마진 − 배송비)
-def test_surplus_conserved():
-  r = settle(CFG, split_obs(), np.array([[[6, 0], [4, 0]]]))
+# 배분 잉여(주문자 + 공급자 + 플랫폼 이윤)의 합 = 거래잉여(마진 − 배송비), 잉여 배분이 달라도 같다
+@pytest.mark.parametrize("sb,ss", [(SB_RULE, SS_RULE), (np.zeros(1), np.zeros(2)), (np.array([50.0]), np.array([10.0, 7.0]))])
+def test_surplus_conserved(sb, ss):
+  r = settle(CFG, split_obs(), (X_SPLIT, sb, ss))
   assert r["sb"].sum() + r["ss"].sum() + r["profit"] == pytest.approx(92 - CFG.f_ship)
+  assert r["profit"] == pytest.approx(92 - CFG.f_ship - sb.sum() - ss.sum())
 
 
-# 요구수량을 다 채우지 못하면 불성립: 수익·배송비 0, 기회손실 = 최저가 공급자 기준 플랫폼 몫 − 배송비
+# 요구수량을 다 채우지 못하면 불성립: 수익·배송비 0, 기회손실 = 최저가 공급자 기준 거래잉여(마진 − 배송비)
 def test_partial_not_fulfilled():
-  r = settle(CFG, split_obs(), np.array([[[6, 0], [0, 0]]]))
+  r = settle(CFG, split_obs(), (np.array([[[6, 0], [0, 0]]]), np.zeros(1), np.zeros(2)))
   assert r["ok"].tolist() == [False]
   assert r["rev"] == 0 and r["ship"] == 0 and r["profit"] == 0
   assert r["sb"].sum() == 0 and r["ss"].sum() == 0
-  assert r["opp"] == pytest.approx(max(0, SH * 10 * (20 - 10) - CFG.f_ship))
+  assert r["opp"] == pytest.approx(max(0, 10 * (20 - 10) - CFG.f_ship))
 
 
 # 묶음 주문은 모든 품목이 확보될 때만 성립한다
 def test_bundle_all_items():
   o = bundle_obs()
-  assert settle(CFG, o, np.array([[[5, 0]]]))["ok"].tolist() == [False]
-  r = settle(CFG, o, np.array([[[5, 5]]]))
+  assert settle(CFG, o, (np.array([[[5, 0]]]), np.zeros(1), np.zeros(1)))["ok"].tolist() == [False]
+  r = settle(CFG, o, (np.array([[[5, 5]]]), np.array([CFG.sh_buy * 150]), np.array([CFG.sh_sup * 150])))
   assert r["ok"].tolist() == [True]
   assert r["profit"] == pytest.approx(SH * (10 * 5 + 20 * 5) - CFG.f_ship)
 
@@ -75,13 +82,26 @@ def test_bundle_all_items():
 ])
 def test_invalid_decision_rejected(x):
   with pytest.raises(AssertionError):
-    settle(CFG, split_obs(), x)
+    settle(CFG, split_obs(), (x, np.zeros(1), np.zeros(2)))
+
+
+# 음수 잉여, 마진을 넘는 잉여, 불성립 주문자에게 준 잉여, 플랫폼 적자(보조금)는 거부한다
+@pytest.mark.parametrize("x,sb,ss", [
+  (X_SPLIT, np.array([-1.0]), np.zeros(2)),
+  (X_SPLIT, np.array([93.0]), np.zeros(2)),
+  (X_SPLIT, np.zeros(1), np.array([61.0, 0.0])),
+  (np.array([[[6, 0], [0, 0]]]), np.array([1.0]), np.zeros(2)),
+  (X_SPLIT, np.array([60.0]), np.array([10.0, 0.0])),
+])
+def test_invalid_surplus_rejected(x, sb, ss):
+  with pytest.raises(AssertionError):
+    settle(CFG, split_obs(), (x, sb, ss))
 
 
 # 주문자가 없는 기간도 정산된다
 def test_no_buyers():
   o = Obs(0, np.zeros((0, 2), int), np.zeros((0, 2)), np.array([[6, 0]]), np.array([[10.0, 0]]), [], [0])
-  r = settle(CFG, o, np.zeros((0, 1, 2), int))
+  r = settle(CFG, o, (np.zeros((0, 1, 2), int), np.zeros(0), np.zeros(1)))
   assert r["profit"] == 0 and r["n_ok"] == 0 and r["opp"] == 0
 
 
@@ -101,13 +121,9 @@ def test_transition_common_random():
   a, b = Env(CFG, 0), Env(CFG, 0)
   a.reset(), b.reset()
   for _ in range(5):
-    oa, ob = a.o, b.o
-    xa = np.zeros((len(oa.bid), len(oa.sid), CFG.n_items), int)
-    j = np.argmax(ob.cap > 0, 0)
-    xb = xa.copy()
-    for i in range(CFG.n_items):
-      xb[:, j[i], i] = np.minimum(ob.q[:, i], ob.cap[j[i], i] // max(1, len(ob.bid)))
-    ra, rb = a.step(xa), b.step(xb)
+    oa, B, J = a.o, len(a.o.bid), len(a.o.sid)
+    ra, rb = a.step((np.zeros((B, J, CFG.n_items), int), np.zeros(B), np.zeros(J))), b.step(Policy(CFG).act(b.o))
+    assert rb["n_ok"] > 0
     assert ra["stay_buy"] == 0 and ra["stay_sup"] == ra["n_sup"] == CFG.n_sup
     assert set(a.o.bid).isdisjoint(oa.bid)
     for k in ("q", "p", "cap", "c"):

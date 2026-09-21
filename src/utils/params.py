@@ -55,6 +55,7 @@ class Cfg:
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
+  tol: float = 1e-6  # 결정 검사 허용 오차 (잉여 범위, 플랫폼 이윤 ≥ 0)
   grb_seed: int = 0
   grb_threads: int = 1
   mip_gap: float = 1e-6
