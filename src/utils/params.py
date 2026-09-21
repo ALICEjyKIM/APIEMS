@@ -45,6 +45,10 @@ class Cfg:
   ret_p0: float = 0.1
   b_buy: float = 30.0
   b_sup: float = 30.0
+  # 재참여확률 구간선형 근사: 잉여율 0 ~ 확률 pwl_hi 지점 등간격 pwl_n점 + 잉여율 pwl_rmax 끝점
+  pwl_n: int = 5
+  pwl_hi: float = 0.97
+  pwl_rmax: float = 1.0
   # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫)
   sh_buy: float = 0.3
   sh_sup: float = 0.3

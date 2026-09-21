@@ -8,6 +8,8 @@ import pytest
 from utils.params import Cfg
 from env.platform import Obs, Env, settle
 from match.milp_solve import Policy
+from env.response import Logistic
+from utils.pwl import points
 from tests.test_env import split_obs, bundle_obs
 
 CFG = Cfg()
@@ -60,3 +62,16 @@ def test_milp_matches_env(k, conc):
     r = env.step(pol.act(env.o))
     assert r["profit"] == pytest.approx(pol.obj, abs=1e-6)
     assert r["profit"] >= 0
+
+
+# 구간선형 근사: 구간 5개, 잉여율 0에서 ret_p0, 끝점은 pwl_rmax, 잉여율 [0, pwl_rmax]에서 원래 곡선과의 최대 오차 ≤ 0.03
+@pytest.mark.parametrize("b", [10.0, 30.0, 100.0])
+@pytest.mark.parametrize("kind", ["buy", "sup"])
+def test_pwl_close(b, kind):
+  cfg = replace(CFG, b_buy=b, b_sup=b)
+  f = Logistic(cfg)
+  r, p = points(cfg, f, kind)
+  assert len(r) - 1 == 5 and r[0] == 0 and r[-1] == cfg.pwl_rmax and (np.diff(r) > 0).all()
+  assert p[0] == pytest.approx(cfg.ret_p0)
+  g = np.linspace(0, cfg.pwl_rmax, 20001)
+  assert np.abs(np.interp(g, r, p) - f.prob(kind, g, 1.0)).max() <= 0.03
