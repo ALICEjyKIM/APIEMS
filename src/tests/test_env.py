@@ -1,6 +1,6 @@
-"""환경 정산, 기간 전이, rollout 테스트 (슬라이스 1).
-손으로 계산 가능한 작은 시장에서 주문 성립 조건, 분할 공급, 용량 검사, 이윤 구성요소를 확인한다.
-기간 전이는 공통 난수와 참여 규칙(주문자 1기간, 공급자 유지)을, rollout은 성과 지표 집계를 확인한다.
+"""환경 정산, 재참여 전이, rollout, 반응 함수 테스트.
+손으로 계산 가능한 작은 시장에서 주문 성립 조건, 분할 공급, 용량·잉여 검사, 이윤 구성요소를 확인한다.
+재참여 전이는 판정 규칙(ret_u < p)과 공통 난수, 공급자 자리 채우기를, rollout은 성과 지표 집계를 확인한다.
 """
 from dataclasses import replace
 import numpy as np
@@ -8,6 +8,8 @@ import pytest
 from utils.params import Cfg
 from env.platform import Obs, Env, settle
 from env.response import Logistic
+from utils.common import ret_u
+from utils.arrivals import perturb
 from match.milp_solve import Policy
 from match.interface import rollout
 
@@ -116,36 +118,116 @@ def test_reset_obs():
   assert (o.q.sum(1) > 0).all()
 
 
-# 공통 난수: 다음 기간 시장은 이번 기간 결정과 무관하다. 주문자는 떠나고 공급자는 모두 남는다
+RULE = (CFG.sh_buy, CFG.sh_sup)
+
+
+# 재참여 판정: 기간 t의 모든 주문자·공급자는 ret_u < p(배분 잉여 / 제안 금액)일 때만 남는다 (거절된 주문자 포함)
+def test_stay_rule():
+  env, pol, f = Env(CFG, 0), Policy(CFG, split=RULE), Logistic(CFG)
+  env.reset()
+  n_stay = 0
+  for t in range(8):
+    o = env.o
+    r = env.step(pol.act(o))
+    assert r["pb"] == pytest.approx(f.prob("buy", r["sb"], (o.p * o.q).sum(1)))
+    assert r["ps"] == pytest.approx(f.prob("sup", r["ss"], (o.c * o.cap).sum(1)))
+    sb = {i for i, p in zip(o.bid, r["pb"]) if ret_u(CFG, 0, "buy", i, t) < p}
+    ss = {i for i, p in zip(o.sid, r["ps"]) if ret_u(CFG, 0, "sup", i, t) < p}
+    assert set(o.bid) & set(env.o.bid) == sb and set(o.sid) & set(env.o.sid) == ss
+    assert r["stay_buy"] == len(sb) and r["stay_sup"] == len(ss)
+    n_stay += len(sb)
+  assert n_stay > 0
+
+
+# 재참여 주문자는 프로필의 품목 구성 그대로, 프로필에 변동을 더한 주문을 낸다
+def test_returning_buyer_order():
+  env, pol = Env(CFG, 0), Policy(CFG, split=RULE)
+  env.reset()
+  seen = 0
+  for t in range(8):
+    prev = set(env.o.bid)
+    env.step(pol.act(env.o))
+    for row, i in enumerate(env.o.bid):
+      if i in prev:
+        seen += 1
+        q = perturb(CFG, 0, "buy", i, env.t, env.buys[i])
+        assert np.array_equal(env.o.q[row], q.qty) and np.array_equal(env.o.p[row], q.price)
+        assert np.array_equal(env.o.q[row] > 0, env.buys[i].items)
+  assert seen > 0
+
+
+# 떠난 공급자 자리는 같은 품목·공급가능량의 새 공급자가 새 번호(t × n_sup + j)로 채운다 (p_sup_new = 1)
+def test_supplier_refill():
+  cfg = replace(CFG, p_sup_new=1.0)
+  env, pol = Env(cfg, 0), Policy(cfg)
+  env.reset()
+  left = 0
+  for _ in range(5):
+    o = env.o
+    env.step(pol.act(o))
+    assert len(env.o.sid) == cfg.n_sup
+    for j, (i, new) in enumerate(zip(o.sid, env.o.sid)):
+      if i != new:
+        left += 1
+        assert new == env.t * cfg.n_sup + j
+        assert np.array_equal(env.o.cap[j], env.inst.sup_cap[j])
+  assert left > 0
+
+
+# 공급자가 모두 떠나 빈 기간도 정산된다 (p_sup_new = 0)
+def test_all_suppliers_gone():
+  cfg = replace(CFG, p_sup_new=0.0)
+  env, pol = Env(cfg, 0), Policy(cfg)
+  env.reset()
+  for _ in range(cfg.T):
+    env.step(pol.act(env.o))
+  assert len(env.o.sid) == 0
+  r = env.step(pol.act(env.o))
+  assert r["n_ok"] == 0 and r["profit"] == 0
+
+
+# 공통 난수: 결정이 달라도 신규 주문자와, 양쪽에 모두 남은 참여자의 다음 주문·공급은 같다
 def test_transition_common_random():
   a, b = Env(CFG, 0), Env(CFG, 0)
   a.reset(), b.reset()
-  for _ in range(5):
-    oa, B, J = a.o, len(a.o.bid), len(a.o.sid)
-    ra, rb = a.step((np.zeros((B, J, CFG.n_items), int), np.zeros(B), np.zeros(J))), b.step(Policy(CFG).act(b.o))
-    assert rb["n_ok"] > 0
-    assert ra["stay_buy"] == 0 and ra["stay_sup"] == ra["n_sup"] == CFG.n_sup
-    assert set(a.o.bid).isdisjoint(oa.bid)
-    for k in ("q", "p", "cap", "c"):
-      assert np.array_equal(getattr(a.o, k), getattr(b.o, k))
-    assert a.o.bid == b.o.bid and a.o.sid == b.o.sid
+  pa, pb = Policy(CFG), Policy(CFG, split=RULE)
+  both = 0
+  for _ in range(8):
+    prev_a, prev_b = set(a.o.bid), set(b.o.bid)
+    a.step(pa.act(a.o)), b.step(pb.act(b.o))
+    assert set(a.o.bid) - prev_a == set(b.o.bid) - prev_b
+    ra, rb = dict(zip(a.o.bid, range(len(a.o.bid)))), dict(zip(b.o.bid, range(len(b.o.bid))))
+    for i in set(ra) & set(rb):
+      both += 1
+      assert np.array_equal(a.o.q[ra[i]], b.o.q[rb[i]]) and np.array_equal(a.o.p[ra[i]], b.o.p[rb[i]])
+  assert both > 0
 
 
-# rollout: 누적 이윤 = 수익 − 배송비, 주문 충족률 = 성립 주문 / 전체 주문, 유지율(주문자 0, 공급자 1: 재참여 반응 전)
+# 근시안은 모두에게 잉여 0을 주므로 재참여율 = ret_p0 (표본 오차 이내)
+def test_myopic_retention_is_p0():
+  outs = [rollout(CFG, Policy(CFG), rep) for rep in range(5)]
+  assert np.mean([o["ret_buy"] for o in outs]) == pytest.approx(CFG.ret_p0, abs=0.03)
+  assert np.mean([o["ret_sup"] for o in outs]) == pytest.approx(CFG.ret_p0, abs=0.05)
+
+
+# rollout: 누적 이윤 = 수익 − 배송비, 주문 충족률 = 성립 주문 / 전체 주문, 유지율 = 남은 참여자 / 참여자, 평균 활동 참여자 수
 @pytest.mark.parametrize("k", [1, 2, 3])
 def test_rollout_metrics(k):
   cfg = replace(CFG, items_per_order=k)
-  env, pol = Env(cfg, 0), Policy(cfg)
+  env, pol = Env(cfg, 0), Policy(cfg, split=RULE)
   env.reset()
   pol.reset(0)
   rs = [env.step(pol.act(env.o)) for _ in range(cfg.T)]
-  out = rollout(cfg, Policy(cfg), 0)
+  out = rollout(cfg, Policy(cfg, split=RULE), 0)
   assert out["profit"] == pytest.approx(sum(r["profit"] for r in rs))
   assert out["profit"] == pytest.approx(out["rev"] - out["ship"])
   assert out["opp"] == pytest.approx(sum(r["opp"] for r in rs))
   assert out["fill"] == pytest.approx(sum(r["n_ok"] for r in rs) / sum(r["n_buy"] for r in rs))
-  assert 0 < out["fill"] <= 1
-  assert out["ret_buy"] == 0 and out["ret_sup"] == 1
+  assert out["ret_buy"] == pytest.approx(sum(r["stay_buy"] for r in rs) / sum(r["n_buy"] for r in rs))
+  assert out["ret_sup"] == pytest.approx(sum(r["stay_sup"] for r in rs) / sum(r["n_sup"] for r in rs))
+  assert out["act_buy"] == pytest.approx(sum(r["n_buy"] for r in rs) / cfg.T)
+  assert out["act_sup"] == pytest.approx(sum(r["n_sup"] for r in rs) / cfg.T)
+  assert 0 < out["fill"] <= 1 and 0 < out["ret_buy"] < 1 and 0 < out["ret_sup"] <= 1
 
 
 # 같은 rep면 같은 결과, 다른 rep면 다른 결과
