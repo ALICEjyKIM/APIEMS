@@ -3,7 +3,7 @@
 λ는 lin_lams 중 공통 검증 분할(vfa/train.val_mask)의 평균제곱오차가 가장 작은 값을 고른다 (튜닝 예산 = 설정 수).
 """
 import numpy as np
-from vfa.train import val_mask
+from vfa import train
 
 
 class Linear:
@@ -29,9 +29,6 @@ class Linear:
     return (X - self.mu) / self.sd @ self.w + self.b
 
 
-# λ 선택: lin_lams 각각을 검증 분할로 재고(검증 평균제곱오차), 가장 작은 λ로 전체 데이터를 다시 맞춘다
+# λ 선택: lin_lams 중 공통 검증 분할의 평균제곱오차가 가장 작은 λ로 전체 데이터를 다시 맞춘다 (vfa/train.select)
 def select(cfg, X, y, g):
-  va = val_mask(cfg, g)
-  mse = {lam: float(np.mean((Linear(lam).fit(X[~va], y[~va]).predict(X[va]) - y[va]) ** 2)) for lam in cfg.lin_lams}
-  lam = min(mse, key=mse.get)
-  return Linear(lam).fit(X, y), mse
+  return train.select(cfg, Linear, cfg.lin_lams, X, y, g)

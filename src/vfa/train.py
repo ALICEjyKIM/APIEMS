@@ -1,6 +1,6 @@
 """가치 근사 학습 데이터.
 튜닝 seed(평가 seed와 분리)에서 후속 정책(규칙 기반, Cfg 몫)으로 돌린 rollout의 (시장 요약 지표, 이후 vf_H기간 이윤 합)을 모은다.
-검증 분할(학습 반복의 뒤 vf_val 비율)은 모든 근사 방법이 같은 것을 쓴다.
+검증 분할(학습 반복의 뒤 vf_val 비율)과 설정 선택(select)은 모든 근사 방법이 같은 것을 쓴다.
 """
 from dataclasses import replace
 import numpy as np
@@ -30,3 +30,11 @@ def collect(cfg):
 # 검증 표본 여부: 학습 반복 번호가 뒤 vf_val 비율에 드는 행
 def val_mask(cfg, g):
   return g >= round(cfg.vf_reps * (1 - cfg.vf_val))
+
+
+# 설정 선택: grid의 각 설정 a로 make(a)를 학습 분할에 맞춰 검증 평균제곱오차를 재고, 가장 작은 설정으로 전체 데이터를 다시 맞춘다
+def select(cfg, make, grid, X, y, g):
+  va = val_mask(cfg, g)
+  mse = {a: float(np.mean((make(a).fit(X[~va], y[~va]).predict(X[va]) - y[va]) ** 2)) for a in grid}
+  a = min(mse, key=mse.get)
+  return make(a).fit(X, y), mse
