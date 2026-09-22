@@ -10,7 +10,7 @@ from env.platform import Env
 from match.interface import rollout
 from bench.myopic import myopic
 from bench.rule_split import rule, scores, best
-from bench.tune import ret_rate, ref_rate
+from bench.tune import ret_rate
 from env.response import Logistic
 
 CFG = Cfg()
@@ -63,12 +63,12 @@ def test_best_split():
   assert not np.array_equal(sc[(0.3, 0.3)], scores(replace(cfg, tune_seed=cfg.tune_seed + 1))[(0.3, 0.3)])
 
 
-# 보정: Cfg 기울기는 기준 잉여율(기준 몫 sh_ref로 운영해 잉여를 받은 참여자의 평균 잉여율)에서 재참여율 ret_ss를 준다
-def test_calibrated_reference():
-  rb, rs = ref_rate(CFG)
+# 두 점 반응: 잉여 0이면 ret_p0(0.5), 기록한 기준 잉여율이면 ret_ref(0.85) (주문자·공급자 동일)
+@pytest.mark.parametrize("kind,r", [("buy", CFG.r_ref_buy), ("sup", CFG.r_ref_sup)])
+def test_two_point_response(kind, r):
   f = Logistic(CFG)
-  assert f.prob("buy", rb, 1.0) == pytest.approx(CFG.ret_ss, abs=0.03)
-  assert f.prob("sup", rs, 1.0) == pytest.approx(CFG.ret_ss, abs=0.03)
+  assert f.prob(kind, 0.0, 1.0) == pytest.approx(CFG.ret_p0)
+  assert f.prob(kind, r, 1.0) == pytest.approx(CFG.ret_ref, abs=1e-6)
 
 
 # 기울기를 올리면 잉여를 받는 참여자의 재참여율이 오른다 (기준 몫으로 주문자·공급자 모두에게 잉여를 주는 소규모 설정)

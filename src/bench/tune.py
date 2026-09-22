@@ -1,6 +1,6 @@
-"""반응 함수 기울기 보정.
-기준 잉여율(기준 몫 sh_ref로 마진의 30%를 받을 때, 잉여를 받은 참여자의 평균 잉여율)에서 재참여율이 ret_ss가 되도록 b_buy, b_sup를 정한다.
-기준 잉여율이 기울기(남는 참여자 구성)에 따라 달라지므로 b × 기준 잉여율(b) = logit(ret_ss) − logit(ret_p0)을 이분탐색으로 푼다.
+"""반응 함수 두 점 설정과 공급자 자리 점유율 측정.
+반응: 잉여 0이면 ret_p0, 기준 잉여율 r_ref(기준 몫 sh_ref로 마진의 30%를 받을 때의 평균 잉여율)이면 ret_ref가 되는 로지스틱.
+기준 잉여율과 점유율은 튜닝용 반복에서 기준 몫으로 운영해 한 번씩 재서 Cfg에 고정한다 (반복 보정·이분탐색 없음).
 """
 from dataclasses import replace
 import numpy as np
@@ -32,30 +32,25 @@ def ref_rate(cfg):
   return float(np.mean(rb)), float(np.mean(rs))
 
 
-# 종류 kind의 기울기를 [0, cal_hi]에서 이분탐색: 그 기울기로 잰 기준 잉여율에서 재참여율이 ret_ss가 되게 (다른 종류 기울기는 고정)
-def fit(cfg, kind):
-  k = np.log(cfg.ret_ss / (1 - cfg.ret_ss)) - np.log(cfg.ret_p0 / (1 - cfg.ret_p0))
-  lo, hi, key = 0.0, cfg.cal_hi, "b_" + kind
-  for _ in range(cfg.cal_iter):
-    mid = (lo + hi) / 2
-    lo, hi = (mid, hi) if mid * ref_rate(replace(cfg, **{key: mid}))[kind == "sup"] < k else (lo, mid)
-  return replace(cfg, **{key: (lo + hi) / 2})
+# 공급자 자리 점유율: 기준 몫 sh_ref로 운영한 튜닝용 반복의 평균 활동 공급자 수 / 공급자 자리 수
+def occupancy(cfg):
+  tc = replace(cfg, seed=cfg.tune_seed)
+  return float(np.mean([rollout(tc, Policy(tc, split=cfg.sh_ref), rep)["act_sup"] for rep in range(cfg.n_tune)]) / cfg.n_sup)
 
 
-# 보정: 두 기울기를 cal_init에서 시작해 주문자·공급자를 번갈아 이분탐색 (cal_alt회 교대)
-def calibrate(cfg):
-  cfg = replace(cfg, b_buy=cfg.cal_init, b_sup=cfg.cal_init)
-  for _ in range(cfg.cal_alt):
-    cfg = fit(fit(cfg, "buy"), "sup")
-  return cfg
+# 두 점 기울기: b = (logit(ret_ref) − logit(ret_p0)) / r_ref
+def slopes(cfg, rb, rs):
+  k = np.log(cfg.ret_ref / (1 - cfg.ret_ref)) - np.log(cfg.ret_p0 / (1 - cfg.ret_p0))
+  return replace(cfg, r_ref_buy=rb, r_ref_sup=rs, b_buy=float(k / rb), b_sup=float(k / rs))
+
+
+# 한 번씩 측정: (1) 기준 잉여율을 재서 두 점 기울기를 정하고 (2) 그 반응으로 점유율을 재서 용량에 쓴다
+def measure(cfg):
+  cfg = slopes(cfg, *ref_rate(cfg))
+  return replace(cfg, occ=occupancy(cfg))
 
 
 if __name__ == "__main__":
   from utils.params import Cfg
-  from env.response import Logistic
-  cfg = calibrate(Cfg())
-  rb, rs = ref_rate(cfg)
-  f = Logistic(cfg)
-  ob, os_ = ret_rate(cfg, cfg.sh_ref)
-  print(f"final: b_buy={cfg.b_buy!r} b_sup={cfg.b_sup!r} ref_rate=({rb:.5f}, {rs:.5f}) "
-        f"p=({f.prob('buy', rb, 1.0):.4f}, {f.prob('sup', rs, 1.0):.4f}) ref-share operating retention=({ob:.4f}, {os_:.4f})")
+  cfg = measure(Cfg())
+  print(f"final: r_ref=({cfg.r_ref_buy!r}, {cfg.r_ref_sup!r}) b=({cfg.b_buy!r}, {cfg.b_sup!r}) occ={cfg.occ!r}")

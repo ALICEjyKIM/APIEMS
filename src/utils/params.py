@@ -22,7 +22,7 @@ class Cfg:
   n_alt: int = 2
   items_per_order: int = 2
   # 주문자
-  lam_buy: float = 10.0  # 기간당 신규 주문자 수 평균. 품목별 총 공급용량도 같은 비율로 커져 k = 1 주문 한 건(평균 21)이 용량(273)의 1/4 이하
+  lam_buy: float = 10.0  # 기간당 신규 주문자 수 평균. 품목별 총 공급용량도 같은 비율로 커져 k = 1 주문 한 건(평균 21)이 용량(151)의 1/4 이하
   qty_lo: int = 2
   qty_hi: int = 5
   qty_unit: int = 3  # 수량 단위 배수 (공급용량도 같은 비율로 커짐)
@@ -32,7 +32,8 @@ class Cfg:
   # 공급자
   cost_lo: float = 0.8
   cost_hi: float = 1.1
-  cover: float = 1.3  # 기대 실효 공급(품목별 총 공급용량 × 공급자 기대 점유율) / 안정 상태 수요
+  cover: float = 1.3  # 기대 실효 공급(품목별 총 공급용량 × 공급자 자리 점유율) / 안정 상태 수요
+  occ: float = 0.6022222222222221  # 공급자 자리 점유율: 기준 몫 sh_ref로 운영한 튜닝용 반복의 실측값 (bench/tune.measure로 한 번 재서 고정)
   ret_ss: float = 0.5
   p_sup_new: float = 0.25  # 빈 공급자 자리 충원 확률 (빈자리 평균 4기간). 새 공급자 검증·계약·등록에 시간이 걸리고, 충원이 빠르면 공급자를 잃는 손해가 없어 유지 가치가 의미를 잃는다
   # 품목
@@ -41,11 +42,15 @@ class Cfg:
   # 재참여 변동
   noise_qty: float = 0.1
   noise_price: float = 0.05
-  # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱, 잉여 0이면 ret_p0
-  # 기울기는 bench/tune.py 보정값: 기준 몫 sh_ref로 마진의 30%를 받을 때의 평균 잉여율(기준 잉여율)에서 재참여율이 ret_ss가 되도록 이분탐색
-  ret_p0: float = 0.1
-  b_buy: float = 22.55859375
-  b_sup: float = 53.41796875
+  # 재참여 반응: 잉여율(배분 잉여 / 제안 금액)의 로지스틱을 두 점으로 정한다 (주문자·공급자 동일):
+  # 잉여 0이면 ret_p0, 기준 잉여율 r_ref(기준 몫 sh_ref로 마진의 30%를 받을 때의 평균 잉여율, 튜닝용 반복 실측)이면 ret_ref
+  # 기울기 b = (logit(ret_ref) − logit(ret_p0)) / r_ref (bench/tune.measure)
+  ret_p0: float = 0.5
+  ret_ref: float = 0.85
+  r_ref_buy: float = 0.10478922733208504
+  r_ref_sup: float = 0.10198023148034958
+  b_buy: float = 16.55323833900429
+  b_sup: float = 17.00918923411489
   # 재참여확률 구간선형 근사: 잉여율 0 ~ 확률 pwl_hi 지점 등간격 pwl_n점 + 잉여율 pwl_rmax 끝점
   pwl_n: int = 5
   pwl_hi: float = 0.97
@@ -53,18 +58,13 @@ class Cfg:
   # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫). sh_ref = 사전 기준 몫(주문자, 공급자): 반응 보정의 기준 잉여율과 규칙 기반 튜닝의 비교 기준.
   # sh_buy·sh_sup = 규칙 기반이 쓰는 몫 (기본 시장 튜닝 결과)
   sh_ref: tuple = (0.3, 0.3)
-  sh_buy: float = 0.0
-  sh_sup: float = 0.1
+  sh_buy: float = 0.3
+  sh_sup: float = 0.3
   sh_buy_grid: tuple = (0.0, 0.1, 0.2, 0.3)
   sh_sup_grid: tuple = (0.1, 0.2, 0.3, 0.4)
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
-  # 반응 기울기 보정 (bench/tune.py): 두 기울기를 cal_init에서 시작, [0, cal_hi] 이분탐색 cal_iter회, 주문자·공급자 교대 cal_alt회
-  cal_init: float = 30.0
-  cal_hi: float = 200.0
-  cal_iter: int = 10
-  cal_alt: int = 2
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)

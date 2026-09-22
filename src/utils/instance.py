@@ -66,12 +66,7 @@ def _slots(cfg, g):
   return items
 
 
-# 공급자 자리의 기대 점유율: 빈자리 충원 확률과 안정 상태 재참여율의 정상 점유율 (용량은 이 값으로 나눠 잡는다)
-def sup_occ(cfg):
-  return cfg.p_sup_new / (cfg.p_sup_new + 1 - cfg.ret_ss)
-
-
-# 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량(안정 상태 활동 주문자 수요 × cover ÷ 공급자 기대 점유율), 기간 0 공급자
+# 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량(안정 상태 활동 주문자 수요 × cover ÷ 실측 공급자 자리 점유율 occ), 기간 0 공급자
 def make(cfg, rep):
   g = rng(cfg, rep, "inst")
   base = g.uniform(cfg.base_lo, cfg.base_hi, cfg.n_items)
@@ -79,7 +74,7 @@ def make(cfg, rep):
   act = cfg.lam_buy / (1 - cfg.ret_ss)
   lo, hi = qty_range(cfg)
   dem = act * cfg.items_per_order / cfg.n_items * (lo + hi) / 2
-  tot = round(cfg.cover * dem / sup_occ(cfg))
+  tot = round(cfg.cover * dem / cfg.occ)
   cap = np.zeros(items.shape, int)
   for i in range(cfg.n_items):
     cap[items[:, i], i] = 1 + g.multinomial(tot - cfg.n_alt, g.dirichlet(np.ones(cfg.n_alt)))
