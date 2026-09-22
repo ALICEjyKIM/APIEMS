@@ -65,14 +65,25 @@ def test_drop_real_market():
     assert np.array_equal(d[2 + 4 * I:2 + 5 * I], (o.cap[k] > 0).astype(float))
 
 
-# 공급 편중도만 다른 두 시장(같은 rep)의 기간 0 지표는 품목별 평균 공급가격을 뺀 모든 값이 같다
-# 평균 공급가격은 가격 수준이 공급자 속성이라 어느 공급자가 어느 품목을 맡는지(편중도가 정함)에 따라 달라진다
+# 공급 편중도만 다른 두 시장(같은 rep)의 기간 0 지표는 품목별 평균 공급가격을 뺀 모든 값이 같다 (가격 생성 방식과 무관한 부분)
+# 평균 공급가격까지 같은지는 아래 test_phi_conc_identical이 새 가격 생성 방식(price_rank)에서 확인한다
 @pytest.mark.parametrize("rep", [0, 1])
 def test_phi_conc_invariant(rep):
   fs = [phi(Env(replace(CFG, conc=c), rep).reset()) for c in (0.0, 0.5, 1.0)]
   keep = np.r_[0:2 + 3 * I, 2 + 4 * I:len(fs[0])]
   for f in fs[1:]:
     assert np.array_equal(f[keep], fs[0][keep])
+
+
+# 새 가격 생성 방식(가격 수준을 (품목, 순번)마다 뽑음, 기본값)에서는 편중도만 다른 시장의 기간 0 지표가 완전히 같다.
+# 기존 방식(공급자마다 가격 수준 하나, 실험 1까지)에서는 품목별 평균 공급가격이 편중도에 따라 달라진다
+@pytest.mark.parametrize("rep", range(5))
+def test_phi_conc_identical(rep):
+  assert CFG.price_rank
+  fs = [phi(Env(replace(CFG, conc=c), rep).reset()) for c in (0.0, 0.5, 1.0)]
+  assert all(np.array_equal(f, fs[0]) for f in fs[1:])
+  old = [phi(Env(replace(CFG, conc=c, price_rank=False), rep).reset()) for c in (0.0, 1.0)]
+  assert not np.array_equal(old[0][2 + 3 * I:2 + 4 * I], old[1][2 + 3 * I:2 + 4 * I])
 
 
 # 규칙 기반으로 몇 기간 돌린 환경 (시뮬레이션 기준치 테스트용, 짧은 호라이즌·적은 rollout)

@@ -52,5 +52,5 @@ def measure(cfg):
 
 if __name__ == "__main__":
   from utils.params import Cfg
-  cfg = measure(Cfg())
+  cfg = measure(replace(Cfg(), price_rank=False))  # Cfg의 기울기·점유율은 기존 가격 생성 방식에서 잰 값
   print(f"final: r_ref=({cfg.r_ref_buy!r}, {cfg.r_ref_sup!r}) b=({cfg.b_buy!r}, {cfg.b_sup!r}) occ={cfg.occ!r}")

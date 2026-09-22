@@ -32,6 +32,9 @@ class Cfg:
   # 공급자
   cost_lo: float = 0.8
   cost_hi: float = 1.1
+  # 공급자 가격 수준: True면 품목별 공급용량처럼 (품목, 그 품목의 k번째 공급자)마다 뽑아 품목별 평균 공급가격이 편중도와 무관하다 (실험 3부터).
+  # False면 공급자마다 하나를 뽑는 기존 방식이다 (슬라이스 2~4의 diag_*·exp1_* 결과를 재현할 때 고정)
+  price_rank: bool = True
   cover: float = 1.3  # 기대 실효 공급(품목별 총 공급용량 × 공급자 자리 점유율) / 안정 상태 수요
   occ: float = 0.6022222222222221  # 공급자 자리 점유율: 기준 몫 sh_ref로 운영한 튜닝용 반복의 실측값 (bench/tune.measure로 한 번 재서 고정)
   ret_ss: float = 0.5

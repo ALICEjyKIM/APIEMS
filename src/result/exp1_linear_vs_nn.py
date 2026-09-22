@@ -106,7 +106,7 @@ def value_table(path):
 
 
 if __name__ == "__main__":
-  cfg, t0 = Cfg(), time.time()
+  cfg, t0 = replace(Cfg(), price_rank=False), time.time()  # 실험 1 결과 재현: 기존 가격 생성 방식 (실험 3부터 품목·순번별)
   if "value" in sys.argv:
     print(value_table(value(cfg)), flush=True)
   if "eval" in sys.argv:

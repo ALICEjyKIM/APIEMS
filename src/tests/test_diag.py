@@ -8,7 +8,8 @@ import numpy as np
 from utils.params import Cfg
 from match.milp_solve import Policy
 from match.interface import rollout
-from result.diag import run, table, per_rep, RUNS
+from result.diag import run, table, per_rep, RUNS, episode
+from result.diag_slice2 import STATES
 
 
 # 원자료 저장: 정책·반복·기간 크기, 누적 이윤 = rollout 누적 이윤, 재실행 시 동일
@@ -40,3 +41,11 @@ def test_save_scores(tmp_path, monkeypatch):
   assert d["pick"] == [0.3, 0.3] and d["scores"]["(0.0, 0.3)"] == [2.0, 4.0, 5.0]
   s = score_table(path)
   assert "diag_t.json" in s and "| (0.0, 0.3) | 4 ± " in s and "+2 ± " in s
+
+
+# 과거 결과 재현: 슬라이스 2 상태는 기존 가격 생성 방식으로 고정되어 저장된 원자료와 같은 결과를 낸다
+def test_past_state_reproduced():
+  cfg, _, pol, _ = STATES["s2d_twopoint_grid"]
+  assert not cfg.price_rank
+  d = json.loads((RUNS / "diag_s2d_twopoint_grid.json").read_text(encoding="utf-8"))
+  assert episode(cfg, pol["근시안"], 0) == d["policies"]["근시안"][0]

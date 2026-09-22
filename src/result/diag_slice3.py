@@ -78,7 +78,7 @@ def mc_table(path):
 
 
 if __name__ == "__main__":
-  cfg, t0 = Cfg(), time.time()
+  cfg, t0 = replace(Cfg(), price_rank=False), time.time()  # 슬라이스 3 결과 재현: 기존 가격 생성 방식
   m, rec = fit(cfg)
   print(f"fit {time.time() - t0:.0f}s: lam={rec['lam']} val_r2={rec['val_r2']:.3f}", flush=True)
   if "eval" in sys.argv:

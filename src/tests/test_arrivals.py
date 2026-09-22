@@ -86,6 +86,22 @@ def test_structure_valid(n_alt, conc):
   assert (inst.sup_cap[inst.sup_items] >= 1).all()
 
 
+# 가격 수준: 새 방식은 한 품목의 공급자들이 (품목, 순번)별 수준을 나눠 갖고 빈자리 충원도 품목마다 새로 뽑는다.
+# 기존 방식은 공급자마다 수준 하나(가격 / 기준가가 품목과 무관하게 일정)
+def test_price_levels():
+  cfg = replace(Cfg(), conc=1.0)
+  for rank in (True, False):
+    c = replace(cfg, price_rank=rank)
+    inst = make(c, 0)
+    sups = inst.sups + list(new_sups(replace(c, p_sup_new=1.0), inst, 0, 3, range(c.n_sup)).values())
+    lv = [s.price[s.items] / inst.base[s.items] for s in sups if s.items.sum() > 1]
+    assert all((l >= c.cost_lo).all() and (l <= c.cost_hi).all() for l in lv)
+    assert all(np.ptp(l) < 1e-12 for l in lv) != rank
+  a, b = make(replace(cfg, conc=0.0), 0), make(cfg, 0)
+  lvl = lambda inst: np.sort([s.price[i] / inst.base[i] for i in range(cfg.n_items) for s in inst.sups if s.items[i]])
+  assert np.allclose(lvl(a), lvl(b))
+
+
 # 떠난 공급자 자리는 같은 품목 조합과 공급가능량의 새 공급자로 채워진다
 def test_vacancy_refill_same_items():
   cfg = replace(Cfg(), p_sup_new=1.0)

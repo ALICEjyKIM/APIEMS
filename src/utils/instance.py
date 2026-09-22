@@ -67,6 +67,7 @@ def _slots(cfg, g):
 
 
 # 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량(안정 상태 활동 주문자 수요 × cover ÷ 실측 공급자 자리 점유율 occ), 기간 0 공급자
+# 가격 수준은 price_rank면 용량과 같은 방식으로 (품목, 순번)마다 뽑아 품목에 공급자 자리 순서대로 준다
 def make(cfg, rep):
   g = rng(cfg, rep, "inst")
   base = g.uniform(cfg.base_lo, cfg.base_hi, cfg.n_items)
@@ -79,14 +80,21 @@ def make(cfg, rep):
   for i in range(cfg.n_items):
     cap[items[:, i], i] = 1 + g.multinomial(tot - cfg.n_alt, g.dirichlet(np.ones(cfg.n_alt)))
   inst = Inst(base, items, cap)
-  inst.sups = [new_sup(cfg, inst, g, j) for j in range(len(items))]
+  if cfg.price_rank:
+    lvl, U = np.zeros(items.shape), g.uniform(cfg.cost_lo, cfg.cost_hi, (cfg.n_items, cfg.n_alt))
+    for i in range(cfg.n_items):
+      lvl[items[:, i], i] = U[i]
+    inst.sups = [Prof(items[j].copy(), cap[j].copy(), base * lvl[j]) for j in range(len(items))]
+  else:
+    inst.sups = [new_sup(cfg, inst, g, j) for j in range(len(items))]
   return inst
 
 
-# 자리 j의 새 공급자: 자리의 품목·공급가능량, 새 가격 수준
+# 자리 j의 새 공급자: 자리의 품목·공급가능량, 새 가격 수준 (price_rank면 품목마다, 아니면 공급자 하나)
 def new_sup(cfg, inst, g, j):
   it = inst.sup_items[j]
-  return Prof(it.copy(), inst.sup_cap[j].copy(), inst.base * g.uniform(cfg.cost_lo, cfg.cost_hi) * it)
+  lvl = g.uniform(cfg.cost_lo, cfg.cost_hi, cfg.n_items if cfg.price_rank else None)
+  return Prof(it.copy(), inst.sup_cap[j].copy(), inst.base * lvl * it)
 
 
 # 주문자 프로필 n개: 품목 구성, 품목별 수량, 제안가격 수준
