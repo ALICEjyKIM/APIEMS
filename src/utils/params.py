@@ -62,6 +62,12 @@ class Cfg:
   sh_sup: float = 0.3
   sh_buy_grid: tuple = (0.0, 0.1, 0.2, 0.3)
   sh_sup_grid: tuple = (0.1, 0.2, 0.3, 0.4)
+  # 가치 근사: 가치 = 후속 정책(규칙 기반)으로 vf_H기간 이윤 합, 학습 데이터는 튜닝 seed vf_reps반복
+  # 시뮬레이션 기준치는 미래 난수 키만 바꾼 mc_R개 rollout 평균 (키 = mc_rep0 + (rep × T + t) × mc_R + k)
+  vf_H: int = 10
+  vf_reps: int = 30
+  mc_R: int = 10
+  mc_rep0: int = 1000000
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10

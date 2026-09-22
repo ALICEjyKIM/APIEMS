@@ -81,12 +81,26 @@ class Env:
     for m, b in enumerate(bs):
       self.buys[self.nb + m] = self.ords[self.nb + m] = b
     self.nb += len(bs)
+    self._observe()
+
+  # 현재 참여자로 관측을 만든다
+  def _observe(self):
     q, p = _mat(self.ords.values(), self.cfg.n_items)
     cap, c = _mat(self.offs.values(), self.cfg.n_items)
     sid = [self.sups[j][0] for j in self.offs]
     rb = np.array([self.lb.get(i, self.cfg.ret_p0) for i in self.ords])
     rs = np.array([self.ls.get(i, self.cfg.ret_p0) for i in sid])
     self.o = Obs(self.t, q, p, cap, c, list(self.ords), sid, rb, rs)
+
+  # 현재 기간 관측의 종류 kind k번째 참여자를 상태에서 뺀다 (주문자는 주문·프로필 삭제, 공급자는 자리를 비움)
+  def drop(self, kind, k):
+    if kind == "buy":
+      i = self.o.bid[k]
+      del self.buys[i], self.ords[i]
+    else:
+      j = list(self.offs)[k]
+      del self.sups[j], self.offs[j]
+    self._observe()
 
   # 결정을 정산하고 재참여 판정(ret_u < p) 후 다음 기간으로: 남은 참여자는 프로필에 변동을 더해 주문·공급한다
   def step(self, dec):

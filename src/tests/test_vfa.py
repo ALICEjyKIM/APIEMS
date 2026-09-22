@@ -1,7 +1,8 @@
 """가치 근사 테스트 (슬라이스 3).
 시장 요약 지표의 손계산 값, 참여자 하나를 뺄 때의 변화, 공급 편중도에 대한 불변성을 확인한다.
-시뮬레이션 기준치, 학습 데이터, 선형 근사, 유지 가치 변환은 뒤 단계에서 이 파일에 더한다.
+시뮬레이션 기준치(결정성, 공통 난수), 학습 데이터, 선형 근사, 유지 가치 변환을 확인한다.
 """
+import copy
 from dataclasses import replace
 import numpy as np
 import pytest
@@ -9,6 +10,7 @@ from utils.params import Cfg
 from env.platform import Obs, Env
 from match.milp_solve import Policy
 from utils.features import phi, drop, phi_drops
+from match.mc_value import mc_value, fkey
 
 CFG = Cfg()
 I = CFG.n_items
@@ -66,3 +68,45 @@ def test_phi_conc_invariant(rep):
   keep = np.r_[0:2 + 3 * I, 2 + 4 * I:len(fs[0])]
   for f in fs[1:]:
     assert np.array_equal(f[keep], fs[0][keep])
+
+
+# 규칙 기반으로 몇 기간 돌린 환경 (시뮬레이션 기준치 테스트용, 짧은 호라이즌·적은 rollout)
+def mid_env(t=3):
+  cfg = replace(CFG, vf_H=3, mc_R=3)
+  env, pol = Env(cfg, 0), Policy(cfg, split=(cfg.sh_buy, cfg.sh_sup))
+  env.reset()
+  for _ in range(t):
+    env.step(pol.act(env.o))
+  return env
+
+
+# 환경에서 참여자를 빼면 관측이 지표의 drop과 같다 (주문자는 주문 삭제, 공급자는 자리를 비움)
+@pytest.mark.parametrize("kind,k", [("buy", 0), ("buy", 2), ("sup", 1)])
+def test_env_drop_matches_feature_drop(kind, k):
+  env = mid_env()
+  o = env.o
+  env.drop(kind, k)
+  assert np.array_equal(phi(env.o), phi(drop(o, kind, k)))
+  assert env.o.bid == drop(o, kind, k).bid and env.o.sid == drop(o, kind, k).sid
+
+
+# 시뮬레이션 기준치: 결정적이고 원래 환경을 바꾸지 않으며, k번째 값은 미래 키 k로 직접 돌린 vf_H기간 이윤 합이고 미래마다 다르다
+def test_mc_value_manual():
+  env = mid_env()
+  t, bid = env.t, list(env.o.bid)
+  v = mc_value(env)
+  assert len(v) == env.cfg.mc_R and np.array_equal(v, mc_value(env))
+  assert env.t == t and env.o.bid == bid
+  e = copy.deepcopy(env)
+  e.rep = fkey(env.cfg, env.rep, env.t, 1)
+  pol = Policy(env.cfg, split=(env.cfg.sh_buy, env.cfg.sh_sup))
+  assert v[1] == pytest.approx(sum(e.step(pol.act(e.o))["profit"] for _ in range(env.cfg.vf_H)))
+  assert len(set(v.round(6))) > 1
+
+
+# 공통 난수: 참여자를 뺀 상태의 기준치는 미리 뺀 환경의 기준치와 같다 (같은 미래 키)
+def test_mc_value_drop_common_random():
+  env = mid_env()
+  e = copy.deepcopy(env)
+  e.drop("sup", 0)
+  assert np.array_equal(mc_value(env, ("sup", 0)), mc_value(e))
