@@ -26,9 +26,8 @@ def episode(cfg, mk, rep):
     ok = (d[0].sum(1) == o.q).all(1)
     capr = eco = 0
     for b in np.where(~ok)[0]:
-      solo = Obs(o.t, o.q[b:b + 1], o.p[b:b + 1], o.cap, o.c, [0], o.sid)
-      eco += (mk(cfg).act(solo)[0] == 0).all()
-      capr += not (mk(cfg).act(solo)[0] == 0).all()
+      alone = (mk(cfg).act(Obs(o.t, o.q[b:b + 1], o.p[b:b + 1], o.cap, o.c, [0], o.sid))[0] == 0).all()
+      eco, capr = eco + alone, capr + (not alone)
     r = env.step(d)
     vals = (r["profit"], r["n_ok"], r["n_buy"], r["stay_buy"], r["n_sup"], r["stay_sup"],
             ((o.cap > 0).sum(0) == 0).sum(), capr, eco, r["sb"].sum(), r["ss"].sum())
@@ -91,3 +90,24 @@ def table(path, ref=None, other=None, width=5):
 
 if __name__ == "__main__":
   print(table(sys.argv[1], *sys.argv[2:4]))
+
+
+# 규칙 기반 몫 튜닝 점수(후보 → 튜닝용 반복별 누적 이윤)와 고른 몫을 result/runs/diag_<tag>.json에 저장한다
+def save_scores(cfg, sc, pick, tag, note=""):
+  data = dict(tag=tag, note=note, cfg=asdict(cfg), pick=list(pick), scores={str(k): v.tolist() for k, v in sc.items()})
+  path = RUNS / f"diag_{tag}.json"
+  path.write_text(json.dumps(data), encoding="utf-8")
+  return path
+
+
+# 튜닝 점수 json에서 표를 만든다: 후보별 평균 누적 이윤(95% CI)과 기준 몫 대비 짝지은 차이(95% CI)
+def score_table(path):
+  d = json.loads(Path(path).read_text(encoding="utf-8"))
+  ref = str(tuple(d["cfg"]["sh_ref"]))
+  sc = {k: np.array(v) for k, v in d["scores"].items()}
+  out = [f"원자료: {Path(path).name}. {d['note']}".rstrip(), f"고른 몫: {tuple(d['pick'])}, 기준 몫: {ref}", "",
+         "| 몫 (주문자, 공급자) | 누적 이윤 (95% CI) | 기준 몫 대비 짝지은 차이 (95% CI) |", "|---|---|---|"]
+  for k in sorted(sc, key=lambda k: -sc[k].mean()):
+    dd = sc[k] - sc[ref]
+    out.append(f"| {k} | {sc[k].mean():.0f} ± {ci(sc[k]):.0f} | {dd.mean():+.0f} ± {ci(dd):.0f} |")
+  return "\n".join(out)

@@ -53,8 +53,9 @@ class Cfg:
   # 고정 잉여 비율 (거래 마진 기준, 나머지는 플랫폼 몫). sh_ref = 사전 기준 몫(주문자, 공급자): 반응 보정의 기준 잉여율과 규칙 기반 튜닝의 비교 기준.
   # sh_buy·sh_sup = 규칙 기반이 쓰는 몫 (기본 시장 튜닝 결과)
   sh_ref: tuple = (0.3, 0.3)
-  sh_buy: float = 0.3
-  sh_sup: float = 0.3
+  sh_buy: float = 0.0
+  sh_sup: float = 0.1
+  sh_buy_grid: tuple = (0.0, 0.1, 0.2, 0.3)
   sh_sup_grid: tuple = (0.1, 0.2, 0.3, 0.4)
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1

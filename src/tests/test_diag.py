@@ -27,3 +27,16 @@ def test_run_and_table(tmp_path, monkeypatch):
   s = table(path, "근시안", "규칙")
   assert "diag_test.json" in s and "짝지은 차이" in s and "t0–3" in s
   assert json.loads(run(cfg, pol, "test", "테스트").read_text(encoding="utf-8")) == d
+
+
+# 튜닝 점수 저장: 후보별 배열과 고른 몫이 json에 남고, 표에 기준 몫 대비 차이가 나온다
+def test_save_scores(tmp_path, monkeypatch):
+  monkeypatch.setattr("result.diag.RUNS", tmp_path)
+  from result.diag import save_scores, score_table
+  cfg = Cfg()
+  sc = {(0.3, 0.3): np.array([1.0, 2.0, 3.0]), (0.0, 0.3): np.array([2.0, 4.0, 5.0])}
+  path = save_scores(cfg, sc, (0.3, 0.3), "t", "테스트")
+  d = json.loads(path.read_text(encoding="utf-8"))
+  assert d["pick"] == [0.3, 0.3] and d["scores"]["(0.0, 0.3)"] == [2.0, 4.0, 5.0]
+  s = score_table(path)
+  assert "diag_t.json" in s and "| (0.0, 0.3) | 4 ± " in s and "+2 ± " in s
