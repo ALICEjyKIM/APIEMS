@@ -9,22 +9,29 @@ from bench.rule_split import rule
 from utils.features import phi
 
 
-# 튜닝 seed 규칙 기반 rollout vf_reps반복의 (지표 행렬, 이후 vf_H기간 이윤 합, 반복 번호). 창이 T 안에 드는 t ≤ T − vf_H만
-def collect(cfg):
+# 튜닝 seed 규칙 기반 rollout vf_reps반복의 (관측 목록, 이후 vf_H기간 이윤 합, 반복 번호). 창이 T 안에 드는 t ≤ T − vf_H만
+# 여러 모델이 같은 데이터로 학습하도록 관측을 돌려주고, 입력 변환은 모델마다 한다
+def collect_obs(cfg):
   tc = replace(cfg, seed=cfg.tune_seed)
-  X, y, g = [], [], []
+  O, y, g = [], [], []
   for rep in range(cfg.vf_reps):
     env, pol = Env(tc, rep), rule(tc)
     env.reset()
-    fs, pr = [], []
+    os_, pr = [], []
     for _ in range(tc.T):
-      fs.append(phi(env.o))
+      os_.append(env.o)
       pr.append(env.step(pol.act(env.o))["profit"])
     for t in range(tc.T - tc.vf_H + 1):
-      X.append(fs[t])
+      O.append(os_[t])
       y.append(sum(pr[t:t + tc.vf_H]))
       g.append(rep)
-  return np.array(X), np.array(y), np.array(g)
+  return O, np.array(y), np.array(g)
+
+
+# 시장 요약 지표 학습 데이터 (지표 행렬, 이후 vf_H기간 이윤 합, 반복 번호)
+def collect(cfg):
+  O, y, g = collect_obs(cfg)
+  return np.array([phi(o) for o in O]), y, g
 
 
 # 검증 표본 여부: 학습 반복 번호가 뒤 vf_val 비율에 드는 행

@@ -3,15 +3,22 @@
 가드: 같은 종류 평균 쪽으로 shrink한 뒤 [0, coef_hi × max(V(φ(o)), 0)]로 자른다. 변환 오차는 시뮬레이션 기준치 유지 가치와 비교한다.
 """
 import numpy as np
-from utils.features import phi, phi_drops
+from utils.features import phi, phi_drops, drop
 from match.mc_value import mc_value
 from match.milp_solve import Policy
 
 
 # 가드 전 유지 가치 (주문자 배열, 공급자 배열)와 현재 상태 가치
+# 모델에 입력 변환 enc(관측 → 배열)가 있으면 그것을, 없으면 시장 요약 지표를 쓴다
 def raw(model, o):
-  v = model.predict(phi(o)[None])[0]
-  c = v - model.predict(phi_drops(o))
+  enc = getattr(model, "enc", None)
+  if enc is None:
+    v = model.predict(phi(o)[None])[0]
+    c = v - model.predict(phi_drops(o))
+  else:
+    X = np.array([enc(o)] + [enc(drop(o, "buy", k)) for k in range(len(o.bid))] + [enc(drop(o, "sup", k)) for k in range(len(o.sid))])
+    p = model.predict(X)
+    v, c = p[0], p[0] - p[1:]
   return c[:len(o.bid)], c[len(o.bid):], v
 
 

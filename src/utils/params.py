@@ -80,6 +80,10 @@ class Cfg:
   nn_epochs: int = 500
   nn_wds: tuple = (0.0, 1e-4, 1e-3, 1e-2, 1e-1)
   nn_seed: int = 0
+  # GNN: 주문자 자리 수(활성 마스크), 은닉 크기(파라미터 수가 MLP 6465와 비슷: 6h² + 19h + 1 = 6356), 메시지 전달 층 수
+  gnn_nb: int = 80
+  gnn_hidden: int = 31
+  gnn_layers: int = 2
   # 유지 가치 변환 오차의 시뮬레이션 기준치 rollout 수 (예측 오차는 mc_R)
   conv_R: int = 30
   # 유지 가치 가드 (모든 근사 방법 공통): 종류 평균 쪽 shrink 비율, 상한 = coef_hi × 상태 가치
