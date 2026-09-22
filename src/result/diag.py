@@ -59,8 +59,8 @@ def ci(x):
   return 1.96 * x.std(ddof=1) / np.sqrt(len(x))
 
 
-# json 하나에서 표를 만든다: 정책별 평균(누적 이윤은 95% CI 포함). ref·other를 주면 other − ref 짝지은 차이와 기간 구간별 차이를 덧붙인다
-def table(path, ref=None, other=None, width=5):
+# json 하나에서 표를 만든다: 정책별 평균(누적 이윤은 95% CI 포함). ref와 others를 주면 각 other − ref 짝지은 차이와 기간 구간별 차이를 덧붙인다
+def table(path, ref=None, *others, width=5):
   d = json.loads(Path(path).read_text(encoding="utf-8"))
   cfg, P = d["cfg"], d["policies"]
   out = [f"원자료: {Path(path).name}. {d['note']}".rstrip(),
@@ -72,7 +72,7 @@ def table(path, ref=None, other=None, width=5):
     m = {k: np.mean([r[k] for r in R]) for k in R[0]}
     out.append(f"| {n} | {m['ret_buy']:.3f} / {m['ret_sup']:.3f} | {m['act_buy']:.1f} / {m['act_sup']:.2f} | {m['occ']:.3f} | {m['zero']:.2f} "
                f"| {m['fill']:.3f} | {m['capr']:.3f} | {m['eco']:.3f} | {m['profit']:.0f} ± {ci([r['profit'] for r in R]):.0f} |")
-  if ref and other:
+  for other in others:
     A, B = np.array([e["profit"] for e in P[other]]), np.array([e["profit"] for e in P[ref]])
     diff = A.sum(1) - B.sum(1)
     out += ["", f"짝지은 차이 ({other} − {ref}) 누적 이윤: {diff.mean():+.0f} ± {ci(diff):.0f}, 양수 {int((diff > 0).sum())}/{len(diff)}, "
@@ -89,7 +89,7 @@ def table(path, ref=None, other=None, width=5):
 
 
 if __name__ == "__main__":
-  print(table(sys.argv[1], *sys.argv[2:4]))
+  print(table(sys.argv[1], *sys.argv[2:]))
 
 
 # 규칙 기반 몫 튜닝 점수(후보 → 튜닝용 반복별 누적 이윤)와 고른 몫을 result/runs/diag_<tag>.json에 저장한다

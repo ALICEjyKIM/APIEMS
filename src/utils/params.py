@@ -16,7 +16,7 @@ class Cfg:
   n_items: int = 6
   n_sup: int = 6
   T: int = 30
-  reps: int = 10
+  reps: int = 30  # 정책 비교(평가 seed) 반복 수. 10반복은 몫 간 차이를 가려낼 검정력이 부족해 30으로 늘림
   # 시장 조건
   conc: float = 0.5
   n_alt: int = 2

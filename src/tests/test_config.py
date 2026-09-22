@@ -21,7 +21,7 @@ def test_cfg_scale():
   assert (cfg.n_items, cfg.n_sup, cfg.n_alt) == (6, 6, 2)
   assert 2 <= cfg.items_per_order <= 3
   assert 20 <= cfg.T <= 30
-  assert 10 <= cfg.reps <= 20
+  assert cfg.reps == 30
   assert 0 <= cfg.conc <= 1
   assert cfg.n_alt <= cfg.n_sup <= cfg.n_items * cfg.n_alt
 
