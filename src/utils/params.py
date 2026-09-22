@@ -84,6 +84,9 @@ class Cfg:
   gnn_nb: int = 80
   gnn_hidden: int = 31
   gnn_layers: int = 2
+  # 실험 3: 학습 반복 수(실험 1의 3배), 예측·변환 오차 상태를 뽑는 검증 반복 수
+  vf_reps3: int = 90
+  e3_state_reps: int = 6
   # 유지 가치 변환 오차의 시뮬레이션 기준치 rollout 수 (예측 오차는 mc_R)
   conv_R: int = 30
   # 유지 가치 가드 (모든 근사 방법 공통): 종류 평균 쪽 shrink 비율, 상한 = coef_hi × 상태 가치
