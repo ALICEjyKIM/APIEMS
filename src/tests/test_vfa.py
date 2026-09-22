@@ -11,6 +11,9 @@ from env.platform import Obs, Env
 from match.milp_solve import Policy
 from utils.features import phi, drop, phi_drops
 from match.mc_value import mc_value, fkey
+from match.interface import rollout
+from vfa.train import collect, val_mask
+from vfa.linear import Linear, select
 
 CFG = Cfg()
 I = CFG.n_items
@@ -110,3 +113,42 @@ def test_mc_value_drop_common_random():
   e = copy.deepcopy(env)
   e.drop("sup", 0)
   assert np.array_equal(mc_value(env, ("sup", 0)), mc_value(e))
+
+
+# 선형 근사: 잡음 없는 선형 목표를 λ = 0으로 정확히 복원하고, 표준편차 0인 지표가 있어도 맞춘다. λ가 크면 가중치가 줄어든다
+def test_linear_recovers():
+  g = np.random.default_rng(0)
+  X = np.c_[g.normal(size=(50, 4)) * [1, 10, 100, 0.1], np.full(50, 7.0)]
+  y = X[:, :4] @ [2.0, -1.0, 0.5, 30.0] + 3.0
+  m = Linear(0.0).fit(X, y)
+  assert m.predict(X) == pytest.approx(y) and m.predict(X[:3] * 2) == pytest.approx((X[:3] * 2)[:, :4] @ [2.0, -1.0, 0.5, 30.0] + 3.0)
+  assert np.linalg.norm(Linear(100.0).fit(X, y).w) < np.linalg.norm(m.w)
+
+
+# λ 선택: 후보마다 공통 검증 분할(뒤 vf_val 비율 반복)의 평균제곱오차를 재고, 가장 작은 λ로 전체 데이터를 다시 맞춘다
+def test_select_lambda():
+  g = np.random.default_rng(1)
+  X = g.normal(size=(300, 5))
+  y = X @ g.normal(size=5) + g.normal(size=300) * 3
+  reps = np.repeat(np.arange(30), 10)
+  m, mse = select(CFG, X, y, reps)
+  va = val_mask(CFG, reps)
+  assert set(mse) == set(CFG.lin_lams) and va.sum() == 60 and (reps[va] >= 24).all()
+  assert m.lam == min(mse, key=mse.get)
+  assert mse[m.lam] == pytest.approx(np.mean((Linear(m.lam).fit(X[~va], y[~va]).predict(X[va]) - y[va]) ** 2))
+  assert m.predict(X) == pytest.approx(Linear(m.lam).fit(X, y).predict(X))
+
+
+# 학습 데이터: 튜닝 seed 규칙 기반 rollout의 t ≤ T − vf_H 상태 지표와 이후 vf_H기간 이윤 합 (rollout 누적 이윤과 맞물림)
+def test_collect():
+  cfg = replace(CFG, T=6, vf_H=2, vf_reps=2)
+  X, y, g = collect(cfg)
+  assert X.shape == (2 * 5, len(phi(Env(cfg, 0).reset()))) and g.tolist() == [0] * 5 + [1] * 5
+  tc = replace(cfg, seed=cfg.tune_seed)
+  env = Env(tc, 0)
+  assert np.array_equal(X[0], phi(env.reset()))
+  pol, pr = Policy(tc, split=(tc.sh_buy, tc.sh_sup)), []
+  for _ in range(tc.T):
+    pr.append(env.step(pol.act(env.o))["profit"])
+  assert y[:5] == pytest.approx([pr[t] + pr[t + 1] for t in range(5)])
+  assert sum(pr) == pytest.approx(rollout(tc, Policy(tc, split=(tc.sh_buy, tc.sh_sup)), 0)["profit"])

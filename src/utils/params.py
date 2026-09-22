@@ -68,6 +68,8 @@ class Cfg:
   vf_reps: int = 30
   mc_R: int = 10
   mc_rep0: int = 1000000
+  vf_val: float = 0.2  # 검증 분할: 학습 반복의 뒤 비율 (모든 근사 방법 공통)
+  lin_lams: tuple = (0.0, 0.1, 1.0, 10.0, 100.0)  # 선형 근사 릿지 λ 후보 (튜닝 예산 5개, MLP와 같게)
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
