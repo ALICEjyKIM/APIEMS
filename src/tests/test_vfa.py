@@ -14,6 +14,7 @@ from match.mc_value import mc_value, fkey
 from match.interface import rollout
 from vfa.train import collect, val_mask
 from vfa.linear import Linear, select
+from vfa.coef import raw, coefs, mc_coefs, conv_err, vfa_policy
 
 CFG = Cfg()
 I = CFG.n_items
@@ -152,3 +153,51 @@ def test_collect():
     pr.append(env.step(pol.act(env.o))["profit"])
   assert y[:5] == pytest.approx([pr[t] + pr[t + 1] for t in range(5)])
   assert sum(pr) == pytest.approx(rollout(tc, Policy(tc, split=(tc.sh_buy, tc.sh_sup)), 0)["profit"])
+
+
+# 지표 가중치가 정해진 선형 모델 (표준화 없음: 평균 0, 표준편차 1)
+def lin_model(w, b):
+  m = Linear(0.0)
+  m.mu, m.sd, m.w, m.b = np.zeros(len(w)), np.ones(len(w)), np.asarray(w, float), b
+  return m
+
+
+# 가드 전 유지 가치 = V(φ(o)) − V(φ(o에서 i 제외)): 선형이면 w · (φ(o) − φ(o∖i))로 손계산 (주문자 수·공급자 수 가중치만 준 경우)
+def test_raw_linear_hand():
+  o = two_obs()
+  w = np.zeros(len(phi(o)))
+  w[0], w[1], w[2] = 100.0, 300.0, 5.0  # 주문자 수, 공급자 수, 품목 0 요구량
+  cb, cs, v = raw(lin_model(w, 1000.0), o)
+  assert v == pytest.approx(1000 + 200 + 600 + 70)
+  assert cb == pytest.approx([100 + 5 * 10, 100 + 5 * 4]) and cs == pytest.approx([300, 300])
+
+
+# 가드: 종류 평균 쪽 shrink(κ = 0.5)로 평균(135)은 그대로·차이(±15)는 절반, 그다음 [0, coef_hi × V(= 1870)]로 자른다
+def test_coefs_guard():
+  o = two_obs()
+  w = np.zeros(len(phi(o)))
+  w[0], w[2], w[1] = 100.0, 5.0, 300.0
+  cb, cs = coefs(CFG, lin_model(w, 1000.0), o)
+  assert cb == pytest.approx([150 - 7.5, 120 + 7.5]) and cs == pytest.approx([300, 300])
+  cb, cs = coefs(replace(CFG, coef_hi=0.07), lin_model(w, 1000.0), o)
+  assert cb == pytest.approx([0.07 * 1870, 127.5]) and cs == pytest.approx([0.07 * 1870] * 2)
+  w[0] = -500.0
+  cb, _ = coefs(CFG, lin_model(w, 1000.0), o)
+  assert (cb == 0).all()
+
+
+# 시뮬레이션 기준치 유지 가치 = 기준치 평균 − 참여자를 뺀 기준치 평균, 변환 오차는 평균 절대 차이
+def test_mc_coefs_and_conv_err():
+  env = mid_env()
+  cb, cs, v = mc_coefs(env)
+  assert len(cb) == len(env.o.bid) and len(cs) == len(env.o.sid) and np.array_equal(v, mc_value(env))
+  assert cs[0] == pytest.approx(v.mean() - mc_value(env, ("sup", 0)).mean())
+  assert conv_err(cb, cb) == 0 and conv_err([1.0, 3.0], [2.0, 1.0]) == pytest.approx(1.5)
+
+
+# 가치 근사 정책: 학습 데이터로 맞춘 선형 모델의 유지 가치를 넣어도 모든 기간 최적해이고, 결정이 환경 검사를 통과한다
+def test_vfa_policy_runs():
+  cfg = replace(CFG, T=6, vf_H=2, vf_reps=3)
+  m, _ = select(cfg, *collect(cfg))
+  out = rollout(cfg, vfa_policy(cfg, m), 0)
+  assert out["profit"] >= 0 and 0 < out["fill"] <= 1
