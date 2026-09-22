@@ -131,6 +131,27 @@ def mask_check(cfg, Xg, m):
   return dict(out_diff=float(np.abs(m.predict(X2) - m.predict(Xg[:50])).max()), edges_touching_empty=touch)
 
 
+# 상자 그림 통계 (1.5 IQR 수염, 최솟값·최댓값)
+def box(a):
+  q1, md, q3 = np.percentile(a, [25, 50, 75])
+  lo, hi = a[a >= q1 - 1.5 * (q3 - q1)].min(), a[a <= q3 + 1.5 * (q3 - q1)].max()
+  return dict(q1=float(q1), med=float(md), q3=float(q3), whislo=float(lo), whishi=float(hi), min=float(a.min()), max=float(a.max()), n=int(len(a)))
+
+
+# 칸 하나의 GNN 입력 척도: 저장한 전체 학습 GNN의 표준화 값으로, 활성 주문자·공급자 노드의 수량 특징(품목 열 전체, 0 포함) 분포
+def scale_stats(cell):
+  cfg = cell_cfg(*cell)
+  m = load(ROOT / "models" / f"exp3_v1_{tag(*cell)}_GNN_full.pt")
+  O, _, _ = collect_obs(cfg)
+  I, nb, n, d = cfg.n_items, cfg.gnn_nb, cfg.gnn_nb + cfg.n_sup, 2 * cfg.n_items + 2
+  Xg = np.array([graph(cfg, o) for o in O])
+  x, mask = Xg[:, :n * d].reshape(-1, n, d), Xg[:, n * d:n * d + n].astype(bool)
+  z = (x - m.mu) / m.sd
+  zb, zs = z[:, :nb][mask[:, :nb]][:, :I].ravel(), z[:, nb:][mask[:, nb:]][:, :I].ravel()
+  rb, rs = x[:, :nb][mask[:, :nb]][:, :I].ravel(), x[:, nb:][mask[:, nb:]][:, :I].ravel()
+  return tag(*cell), dict(z_buy=box(zb), z_sup=box(zs), raw_buy=box(rb), raw_sup=box(rs))
+
+
 # 칸 하나: 수집 → 모델 × weight decay {0, 0.1} 학습 곡선 → v1 선택값 전체 재학습·저장 → 잡음 → GNN 점검
 def run(cell):
   t0, cfg = time.time(), cell_cfg(*cell)
@@ -229,6 +250,12 @@ if __name__ == "__main__":
     note = f"튜닝 seed, v1 설정(학습 {cell_cfg(*CELLS[0]).vf_reps}반복), 잡음 상태 {NOISE_N}개 × 미래 {NOISE_R}번"
     path.write_text(json.dumps(dict(note=note, cells=cells)), encoding="utf-8")
     print(path, f"{time.time() - t0:.0f}s", flush=True)
+  if "scale" in sys.argv:
+    with Pool(len(CELLS)) as p:
+      sc = dict(p.map(scale_stats, CELLS))
+    sp = diag.RUNS / "exp3_diag_scale.json"
+    sp.write_text(json.dumps(dict(note="GNN 입력 수량 특징 분포: 저장한 전체 학습 GNN(result/models/exp3_v1_*_GNN_full.pt)의 표준화 값, 튜닝 seed 학습 90반복 관측, 활성 노드 품목 열 전체(0 포함)", cells=sc)), encoding="utf-8")
+    print(sp, flush=True)
   D = json.loads(path.read_text(encoding="utf-8"))
   if "fig" in sys.argv:
     figures(D)
