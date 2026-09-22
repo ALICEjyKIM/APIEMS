@@ -156,6 +156,24 @@ def test_returning_buyer_order():
   assert seen > 0
 
 
+# 관측의 참여자별 재참여확률: 직전 기간 배분 잉여로 계산한 값, 신규 참여자는 잉여 0의 값(ret_p0)
+def test_obs_last_retention_prob():
+  env, pol = Env(CFG, 0), Policy(CFG, split=RULE)
+  env.reset()
+  assert np.allclose(env.o.rb, CFG.ret_p0) and np.allclose(env.o.rs, CFG.ret_p0)
+  seen = 0
+  for _ in range(6):
+    o = env.o
+    r = env.step(pol.act(o))
+    pb, ps = dict(zip(o.bid, r["pb"])), dict(zip(o.sid, r["ps"]))
+    for i, p in zip(env.o.bid, env.o.rb):
+      assert p == pytest.approx(pb.get(i, CFG.ret_p0))
+      seen += i in pb
+    for i, p in zip(env.o.sid, env.o.rs):
+      assert p == pytest.approx(ps.get(i, CFG.ret_p0))
+  assert seen > 0
+
+
 # 떠난 공급자 자리는 같은 품목·공급가능량의 새 공급자가 새 번호(t × n_sup + j)로 채운다 (p_sup_new = 1)
 def test_supplier_refill():
   cfg = replace(CFG, p_sup_new=1.0)

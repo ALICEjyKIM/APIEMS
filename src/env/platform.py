@@ -14,7 +14,7 @@ from env.response import Logistic
 class Obs:
   """기간 t에 정책이 보는 시장.
   q·p: 주문자별 품목 요구수량·제안가격 (B×I), cap·c: 공급자별 품목 공급가능량·공급가격 (J×I).
-  bid·sid: 행 순서대로의 주문자·공급자 식별자.
+  bid·sid: 행 순서대로의 주문자·공급자 식별자, rb·rs: 참여자별 직전 기간 재참여확률 (신규 참여자는 잉여 0의 값).
   """
   t: int
   q: np.ndarray
@@ -23,6 +23,8 @@ class Obs:
   c: np.ndarray
   bid: list
   sid: list
+  rb: np.ndarray = None
+  rs: np.ndarray = None
 
 
 # 참여자 프로필 목록 → (수량, 가격) 행렬 (참여자가 없으면 0행)
@@ -67,7 +69,7 @@ class Env:
   # 기간 0 시장: 기간 0 공급자(번호 = 자리)와 신규 주문자
   def reset(self):
     self.t, self.nb = 0, 0
-    self.buys, self.ords = {}, {}
+    self.buys, self.ords, self.lb, self.ls = {}, {}, {}, {}
     self.sups = {j: (j, s) for j, s in enumerate(self.inst.sups)}
     self.offs = dict(enumerate(self.inst.sups))
     self._arrive()
@@ -81,7 +83,10 @@ class Env:
     self.nb += len(bs)
     q, p = _mat(self.ords.values(), self.cfg.n_items)
     cap, c = _mat(self.offs.values(), self.cfg.n_items)
-    self.o = Obs(self.t, q, p, cap, c, list(self.ords), [self.sups[j][0] for j in self.offs])
+    sid = [self.sups[j][0] for j in self.offs]
+    rb = np.array([self.lb.get(i, self.cfg.ret_p0) for i in self.ords])
+    rs = np.array([self.ls.get(i, self.cfg.ret_p0) for i in sid])
+    self.o = Obs(self.t, q, p, cap, c, list(self.ords), sid, rb, rs)
 
   # 결정을 정산하고 재참여 판정(ret_u < p) 후 다음 기간으로: 남은 참여자는 프로필에 변동을 더해 주문·공급한다
   def step(self, dec):
@@ -89,6 +94,7 @@ class Env:
     r = settle(cfg, o, dec)
     wb, ws = worth(o)
     r["pb"], r["ps"] = self.resp.prob("buy", r["sb"], wb), self.resp.prob("sup", r["ss"], ws)
+    self.lb, self.ls = dict(zip(o.bid, r["pb"])), dict(zip(o.sid, r["ps"]))
     self.t = t + 1
     self.buys = {i: self.buys[i] for i, p in zip(o.bid, r["pb"]) if ret_u(cfg, rep, "buy", i, t) < p}
     self.sups = {j: s for (j, s), p in zip(self.sups.items(), r["ps"]) if ret_u(cfg, rep, "sup", s[0], t) < p}

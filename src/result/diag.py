@@ -8,15 +8,17 @@ from dataclasses import asdict
 from pathlib import Path
 import numpy as np
 from env.platform import Env, Obs
+from match.milp_solve import Policy
 
 RUNS = Path(__file__).resolve().parent / "runs"
 KEYS = ("profit", "n_ok", "n_buy", "stay_buy", "n_sup", "stay_sup", "zero", "capr", "eco", "sb", "ss")
 
 
 # 정책 하나를 반복 rep로 돌린 기간별 원자료: 이윤, 성립·전체 주문 수, 남은·전체 주문자·공급자 수, 공급자 없는 품목 수,
-# 거절 원인(용량 경쟁 = 혼자 넣으면 성립 / 단독 불성립 = 혼자 넣어도 불성립), 배분 잉여 합(주문자·공급자)
+# 거절 원인(유지 가치를 뺀 같은 정책에 주문 하나만 넣어: 용량 경쟁 = 성립 / 단독 불성립 = 불성립), 배분 잉여 합(주문자·공급자)
 def episode(cfg, mk, rep):
   env, pol = Env(cfg, rep), mk(cfg)
+  chk = Policy(cfg, split=pol.split)
   env.reset()
   pol.reset(rep)
   out = {k: [] for k in KEYS}
@@ -26,7 +28,7 @@ def episode(cfg, mk, rep):
     ok = (d[0].sum(1) == o.q).all(1)
     capr = eco = 0
     for b in np.where(~ok)[0]:
-      alone = (mk(cfg).act(Obs(o.t, o.q[b:b + 1], o.p[b:b + 1], o.cap, o.c, [0], o.sid))[0] == 0).all()
+      alone = (chk.act(Obs(o.t, o.q[b:b + 1], o.p[b:b + 1], o.cap, o.c, [0], o.sid))[0] == 0).all()
       eco, capr = eco + alone, capr + (not alone)
     r = env.step(d)
     vals = (r["profit"], r["n_ok"], r["n_buy"], r["stay_buy"], r["n_sup"], r["stay_sup"],
