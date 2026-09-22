@@ -187,12 +187,14 @@ def test_coefs_guard():
   assert (cb == 0).all()
 
 
-# 시뮬레이션 기준치 유지 가치 = 기준치 평균 − 참여자를 뺀 기준치 평균, 변환 오차는 평균 절대 차이
+# 시뮬레이션 기준치 유지 가치 = 기준치 평균 − 참여자를 뺀 기준치 평균, 표준오차는 같은 미래 키끼리의 차이로, 변환 오차는 평균 절대 차이
 def test_mc_coefs_and_conv_err():
   env = mid_env()
-  cb, cs, v = mc_coefs(env)
-  assert len(cb) == len(env.o.bid) and len(cs) == len(env.o.sid) and np.array_equal(v, mc_value(env))
-  assert cs[0] == pytest.approx(v.mean() - mc_value(env, ("sup", 0)).mean())
+  cb, cs, v, sb, ss = mc_coefs(env)
+  assert len(cb) == len(sb) == len(env.o.bid) and len(cs) == len(ss) == len(env.o.sid) and np.array_equal(v, mc_value(env))
+  d = v - mc_value(env, ("sup", 0))
+  assert cs[0] == pytest.approx(d.mean()) and ss[0] == pytest.approx(d.std(ddof=1) / np.sqrt(len(d)))
+  assert np.array_equal(mc_value(env, R=5)[:env.cfg.mc_R], v) and len(mc_coefs(env, R=5)[2]) == 5
   assert conv_err(cb, cb) == 0 and conv_err([1.0, 3.0], [2.0, 1.0]) == pytest.approx(1.5)
 
 

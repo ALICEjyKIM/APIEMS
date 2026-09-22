@@ -22,12 +22,14 @@ def coefs(cfg, model, o):
   return guard(cb), guard(cs)
 
 
-# 시뮬레이션 기준치 유지 가치: 기준치 평균 V_mc(s) − V_mc(s에서 i 제외) (주문자 배열, 공급자 배열, 상태 기준치 배열). 같은 미래 키
-def mc_coefs(env):
-  v = mc_value(env)
-  cb = np.array([v.mean() - mc_value(env, ("buy", k)).mean() for k in range(len(env.o.bid))])
-  cs = np.array([v.mean() - mc_value(env, ("sup", k)).mean() for k in range(len(env.o.sid))])
-  return cb, cs, v
+# 시뮬레이션 기준치 유지 가치: rollout R개(None이면 mc_R)의 V_mc(s) − V_mc(s에서 i 제외) 평균과 그 표준오차 (같은 미래 키끼리 짝지음)
+# → (주문자 c, 공급자 c, 상태 기준치 배열, 주문자 c 표준오차, 공급자 c 표준오차)
+def mc_coefs(env, R=None):
+  v = mc_value(env, R=R)
+  d = {kind: [v - mc_value(env, (kind, k), R) for k in range(n)] for kind, n in (("buy", len(env.o.bid)), ("sup", len(env.o.sid)))}
+  c = {kind: np.array([x.mean() for x in d[kind]]) for kind in d}
+  se = {kind: np.array([x.std(ddof=1) / np.sqrt(len(x)) for x in d[kind]]) for kind in d}
+  return c["buy"], c["sup"], v, se["buy"], se["sup"]
 
 
 # 변환 오차: 모델 유지 가치(가드 전)와 기준치 유지 가치의 평균 절대 차이

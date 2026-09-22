@@ -8,14 +8,16 @@ from bench.rule_split import rule
 
 
 # 미래 키: 반복 rep의 기간 t 상태에서 k번째 rollout (평가·튜닝 반복 번호와 겹치지 않음)
+# k ≥ mc_R이면 1~2기간 뒤 상태의 키와 겹치므로, rollout을 mc_R보다 많이 쓸 때는 상태 간격을 넉넉히 둔다 (실험 1 변환 오차는 10기간 간격)
 def fkey(cfg, rep, t, k):
   return cfg.mc_rep0 + (rep * cfg.T + t) * cfg.mc_R + k
 
 
-# 환경 env의 현재 상태에서 mc_R개 미래 각각의 후속 정책 vf_H기간 이윤 합 (drop = (종류, 행)이면 그 참여자를 뺀 상태에서). env는 바꾸지 않는다
-def mc_value(env, drop=None):
+# 환경 env의 현재 상태에서 R개(None이면 mc_R) 미래 각각의 후속 정책 vf_H기간 이윤 합 (drop = (종류, 행)이면 그 참여자를 뺀 상태에서)
+# 미래 키는 mc_R 간격으로 잡아 R이 달라도 앞쪽 미래가 같다. env는 바꾸지 않는다
+def mc_value(env, drop=None, R=None):
   cfg, out = env.cfg, []
-  for k in range(cfg.mc_R):
+  for k in range(R or cfg.mc_R):
     e = copy.deepcopy(env)
     e.rep = fkey(cfg, env.rep, env.t, k)
     if drop:

@@ -38,13 +38,26 @@ def episode(cfg, mk, rep):
   return out
 
 
-# 정책들(이름 → cfg를 받아 정책을 만드는 함수)을 cfg.reps 반복으로 돌려 원자료를 저장하고 경로를 돌려준다
-def run(cfg, policies, tag, note=""):
+# 정책들(이름 → cfg를 받아 정책을 만드는 함수)을 cfg.reps 반복으로 돌려 원자료를 result/runs/<prefix>_<tag>.json에 저장하고 경로를 돌려준다
+def run(cfg, policies, tag, note="", prefix="diag"):
   data = dict(tag=tag, note=note, cfg=asdict(cfg),
               policies={n: [episode(cfg, mk, rep) for rep in range(cfg.reps)] for n, mk in policies.items()})
-  path = RUNS / f"diag_{tag}.json"
+  path = RUNS / f"{prefix}_{tag}.json"
   path.write_text(json.dumps(data), encoding="utf-8")
   return path
+
+
+# 원자료 json에 요약을 덧붙여 저장한다: 정책별 누적 지표의 평균·95% CI, pairs의 (정책, 기준 정책) 누적 이윤 짝지은 차이
+def summarize(path, pairs):
+  d = json.loads(Path(path).read_text(encoding="utf-8"))
+  R = {n: [per_rep(e, d["cfg"]) for e in eps] for n, eps in d["policies"].items()}
+  P = {n: np.array([sum(e["profit"]) for e in eps]) for n, eps in d["policies"].items()}
+  d["summary"] = dict(
+    policies={n: {k: dict(mean=float(np.mean([r[k] for r in rs])), ci=float(ci([r[k] for r in rs]))) for k in rs[0]} for n, rs in R.items()},
+    paired={f"{a} − {b}": dict(mean=float((P[a] - P[b]).mean()), ci=float(ci(P[a] - P[b])), pos=int((P[a] > P[b]).sum()), n=len(P[a]))
+            for a, b in pairs})
+  Path(path).write_text(json.dumps(d), encoding="utf-8")
+  return d["summary"]
 
 
 # 한 반복의 누적 지표: 누적 이윤, 충족률, 재참여율, 평균 활동 참여자 수, 공급자 자리 점유율, 공급자 없는 품목 수, 거절 원인 비율

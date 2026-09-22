@@ -44,7 +44,7 @@ def mc_check(cfg, m):
         cb, cs, v = raw(m, env.o)
         row = dict(rep=rep, t=t, pred=float(v), mc=mc_value(env).tolist())
         if len(out) < CONV_N:
-          mb, ms, _ = mc_coefs(env)
+          mb, ms = mc_coefs(env)[:2]
           row.update(c_buy=cb.tolist(), c_sup=cs.tolist(), mc_buy=mb.tolist(), mc_sup=ms.tolist())
         out.append(row)
       env.step(pol.act(env.o))
