@@ -15,6 +15,7 @@ from match.interface import rollout
 from vfa.train import collect, val_mask
 from vfa.linear import Linear, select
 from vfa.coef import raw, coefs, mc_coefs, conv_err, vfa_policy
+from vfa.mlp import MLP, select as mlp_select
 
 CFG = Cfg()
 I = CFG.n_items
@@ -199,5 +200,45 @@ def test_mc_coefs_and_conv_err():
 def test_vfa_policy_runs():
   cfg = replace(CFG, T=6, vf_H=2, vf_reps=3)
   m, _ = select(cfg, *collect(cfg))
+  out = rollout(cfg, vfa_policy(cfg, m), 0)
+  assert out["profit"] >= 0 and 0 < out["fill"] <= 1
+
+
+# 곱셈 목표(x1·x2)는 선형으로 설명되지 않지만 MLP는 검증 오차가 훨씬 작다 (같은 학습·검증 분할)
+def test_mlp_beats_linear_on_interaction():
+  g = np.random.default_rng(2)
+  X = g.normal(size=(400, 6))
+  y = 100 * X[:, 0] * X[:, 1] + g.normal(size=400)
+  tr = np.arange(400) < 320
+  e = lambda m: np.mean((m.fit(X[tr], y[tr]).predict(X[~tr]) - y[~tr]) ** 2)
+  assert e(MLP(CFG, 0.0)) < 0.2 * e(Linear(0.0))
+
+
+# 같은 seed면 같은 예측, weight decay가 크면 가중치 노름이 작다
+def test_mlp_deterministic_and_decay():
+  g = np.random.default_rng(3)
+  X, y = g.normal(size=(200, 5)), g.normal(size=200)
+  a, b = MLP(CFG, 0.0).fit(X, y), MLP(CFG, 0.0).fit(X, y)
+  assert np.array_equal(a.predict(X), b.predict(X))
+  norm = lambda m: sum(float((p.detach() ** 2).sum()) for p in m.net.parameters())
+  assert norm(MLP(CFG, 0.1).fit(X, y)) < norm(a)
+
+
+# weight decay 선택: 후보는 nn_wds, 고른 값은 검증 MSE 최소 (선형과 같은 분할·같은 예산)
+def test_mlp_select():
+  g = np.random.default_rng(4)
+  X = g.normal(size=(300, 4))
+  y = X[:, 0] * X[:, 1] + g.normal(size=300) * 0.5
+  reps = np.repeat(np.arange(30), 10)
+  m, mse = mlp_select(CFG, X, y, reps)
+  assert set(mse) == set(CFG.nn_wds) and len(mse) == len(CFG.lin_lams) and m.wd == min(mse, key=mse.get)
+
+
+# MLP도 유지 가치 변환·가치 근사 정책에 그대로 쓰인다 (작은 설정 rollout, 모든 기간 최적해)
+def test_mlp_policy_runs():
+  cfg = replace(CFG, T=6, vf_H=2, vf_reps=5, nn_epochs=50)
+  m, _ = mlp_select(cfg, *collect(cfg))
+  cb, cs, v = raw(m, Env(cfg, 0).reset())
+  assert np.isfinite(v) and np.isfinite(cb).all() and np.isfinite(cs).all()
   out = rollout(cfg, vfa_policy(cfg, m), 0)
   assert out["profit"] >= 0 and 0 < out["fill"] <= 1

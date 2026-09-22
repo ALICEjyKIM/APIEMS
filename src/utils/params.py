@@ -70,6 +70,15 @@ class Cfg:
   mc_rep0: int = 1000000
   vf_val: float = 0.2  # 검증 분할: 학습 반복의 뒤 비율 (모든 근사 방법 공통)
   lin_lams: tuple = (0.0, 0.1, 1.0, 10.0, 100.0)  # 선형 근사 릿지 λ 후보 (튜닝 예산 5개, MLP와 같게)
+  # MLP: 은닉 nn_layers층 × nn_hidden, Adam nn_lr, 전체 배치 nn_epochs회, weight decay 후보 nn_wds (튜닝 예산 5개, 선형과 같게)
+  nn_hidden: int = 64
+  nn_layers: int = 2
+  nn_lr: float = 1e-3
+  nn_epochs: int = 500
+  nn_wds: tuple = (0.0, 1e-4, 1e-3, 1e-2, 1e-1)
+  nn_seed: int = 0
+  # 유지 가치 변환 오차의 시뮬레이션 기준치 rollout 수 (예측 오차는 mc_R)
+  conv_R: int = 30
   # 유지 가치 가드 (모든 근사 방법 공통): 종류 평균 쪽 shrink 비율, 상한 = coef_hi × 상태 가치
   shrink: float = 0.5
   coef_hi: float = 0.2
