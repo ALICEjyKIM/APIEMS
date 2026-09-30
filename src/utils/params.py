@@ -80,9 +80,10 @@ class Cfg:
   nn_epochs: int = 500
   nn_wds: tuple = (0.0, 1e-4, 1e-3, 1e-2, 1e-1)
   nn_seed: int = 0
-  # GNN: 주문자 자리 수(활성 마스크), 은닉 크기(파라미터 수가 MLP 6465와 비슷: 6h² + 19h + 1 = 6356), 메시지 전달 층 수
+  # GNN: 주문자 자리 수(활성 마스크), 은닉 크기, 메시지 전달 층 수
+  # gnn_hidden = 0이면 MLP 파라미터 수에 가장 가까운 값을 자동으로 쓴다 (vfa/gnn.hidden). 고정하려면 값을 넣는다
   gnn_nb: int = 80
-  gnn_hidden: int = 31
+  gnn_hidden: int = 0
   gnn_layers: int = 2
   # 실험 3: 학습 반복 수(실험 1의 3배), 예측·변환 오차 상태를 뽑는 검증 반복 수
   vf_reps3: int = 90

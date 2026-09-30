@@ -127,7 +127,31 @@ src/result: exp1/2/3 스크립트, plots, summary, runs/(원자료 json)
 - MILP는 gurobipy로 작성한다. 모델 파라미터 OutputFlag=0, Seed·Threads·MIPGap은 Cfg에서 고정한다.
 - 솔버 상태는 assert m.Status == GRB.OPTIMAL로 검사한다.
 - 재참여확률의 구간선형 근사는 addGenConstrPWL을 사용하고, 꺾인 점 생성은 utils/pwl.py가 담당한다.
-- 보고와 설명은 한국어로 한다.
+
+## 보고 문체
+
+보고와 설명은 한국어로 한다. 아래는 번역투를 막기 위한 규칙이다.
+
+- 기술 용어는 영어를 그대로 쓴다. separable approximation, retention value, leave-one-out,
+  bid price, supergradient, multilinear extension, churn을 억지로 번역하지 않는다.
+- 새 문서에서는 용어가 처음 나올 때만 "separable approximation(분리형 근사)"으로 병기하고
+  이후에는 영어로만 쓴다. 기존 문서의 한국어 용어는 그 문서를 손볼 때 함께 바꾼다.
+- 명사화하지 않는다. "~라는 것입니다", "~라는 점에서", "~의 자리" 금지.
+- 강조 표지를 빼고 그냥 쓴다. "결정적으로", "핵심은", "정확히", "중요한 것은" 금지.
+- 조어를 만들지 않는다. 기존 용어가 없으면 설명으로 쓴다.
+- 볼드와 표를 남용하지 않는다. 표는 비교 항목이 세 개 이상일 때만 쓴다.
+- 한 문장에 한 가지만 담고 짧게 쓴다.
+- 결론을 먼저, 근거를 뒤에.
+
+### 고친 사례
+
+지적받은 문장과 고친 문장을 쌍으로 누적한다. 추상적 지침보다 이 목록이 더 잘 듣는다.
+
+- "강제되는 새 방법 부품" → "c_i 계산을 바꿔야 한다"
+- "우리 자리가 남습니다" → "여기는 아직 아무도 안 했습니다"
+- "기존 방법이 깨지는 이유가 생긴다" → "기존 방법이 왜 안 되는지 설명할 수 있다"
+- "분리형 근사" → "separable approximation"
+- "파급 인식 유지 가치" → "propagation-aware retention value"
 
 ## 검증 과정
 

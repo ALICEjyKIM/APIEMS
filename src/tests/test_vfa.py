@@ -167,6 +167,28 @@ def test_collect():
   assert sum(pr) == pytest.approx(rollout(tc, Policy(tc, split=(tc.sh_buy, tc.sh_sup)), 0)["profit"])
 
 
+# 검증 분할은 반복 단위다: 같은 반복의 상태가 학습과 검증에 나뉘지 않는다 (실험 3의 vf_reps3에서도)
+@pytest.mark.parametrize("reps", [CFG.vf_reps, CFG.vf_reps3])
+def test_val_split_is_by_rep(reps):
+  cfg = replace(CFG, vf_reps=reps)
+  g = np.repeat(np.arange(reps), 7)
+  va = val_mask(cfg, g)
+  r0 = round(reps * (1 - cfg.vf_val))
+  assert set(g[va]) == set(range(r0, reps)) and set(g[~va]) == set(range(r0))
+  assert not (set(g[va]) & set(g[~va]))
+  assert abs(va.mean() - cfg.vf_val) < 1 / reps
+
+
+# 미래 난수 키는 학습·평가 반복 번호와 겹치지 않고, 상태가 vf_H기간 떨어지면 conv_R개 키도 겹치지 않는다
+def test_mc_keys_disjoint():
+  c = CFG
+  assert c.mc_rep0 > max(c.reps, c.vf_reps, c.vf_reps3, c.n_tune)
+  assert fkey(c, 0, 0, 0) >= c.mc_rep0
+  ks = {fkey(c, r, t, k) for r in range(3) for t in range(c.T) for k in range(c.mc_R)}
+  assert len(ks) == 3 * c.T * c.mc_R  # 같은 반복·기간 안에서 키가 중복되지 않는다
+  assert fkey(c, 0, 10, c.conv_R - 1) < fkey(c, 0, 10 + c.vf_H, 0)  # 변환 오차 상태 간격
+
+
 # 지표 가중치가 정해진 선형 모델 (표준화 없음: 평균 0, 표준편차 1)
 def lin_model(w, b):
   m = Linear(0.0)
