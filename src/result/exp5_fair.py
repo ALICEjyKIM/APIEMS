@@ -6,7 +6,10 @@ import json
 import sys
 import time
 from dataclasses import asdict, replace
+from multiprocessing import Pool
+from pathlib import Path
 import numpy as np
+import torch
 from utils.params import Cfg, SCALE15
 from utils.features import phi
 from env.platform import Env
@@ -17,7 +20,13 @@ from vfa.train import tkey, target
 from vfa.linear import Linear
 from vfa.mlp import MLP
 from vfa.gnn import GNN, hidden, n_params
+from vfa.coef import raw
 from result import diag
+
+MODELS = Path(__file__).resolve().parent / "models" / "exp5"
+# 18칸: n_alt × 공급 편중도 × 주문당 품목 수 (환경 보정값은 SCALE15 그대로, 칸 사이에는 시장 조건만 다르다)
+CELLS = [(a, c, k) for a in (3, 4) for c in (0.0, 0.5, 1.0) for k in (1, 2, 3)]
+WORKERS = 12
 
 NAMES = ("선형", "MLP", "GNN")
 PAIRS = (("MLP", "선형"), ("GNN", "선형"), ("GNN", "MLP"))
@@ -34,16 +43,16 @@ def tag(cfg):
   return f"alt{cfg.n_alt}_conc{cfg.conc:g}_k{cfg.items_per_order}"
 
 
-# 반복 범위: 학습 / 검증 / 시험 (시험은 vf_reps 뒤 test_reps개)
+# 반복 범위: 학습 / 검증 / 시험 (시험은 test_rep0부터 test_reps개. 90~107은 용량 판단에 한 번 써서 은퇴)
 def splits(cfg):
   r0 = round(cfg.vf_reps * (1 - cfg.vf_val))
-  return dict(train=range(r0), val=range(r0, cfg.vf_reps), test=range(cfg.vf_reps, cfg.vf_reps + cfg.test_reps))
+  return dict(train=range(r0), val=range(r0, cfg.vf_reps), test=range(cfg.test_rep0, cfg.test_rep0 + cfg.test_reps))
 
 
-# 튜닝 seed 궤적을 반복 reps로 걸으며 t ≤ T − vf_H 상태의 관측과 반복 번호를 모은다 (futures=k면 상태마다 미래 k개도)
+# 튜닝 seed 궤적을 반복 reps로 걸으며 t ≤ T − vf_H 상태의 관측·미래 행렬·반복 번호·기간을 모은다 (futures=k면 상태마다 미래 k개)
 def walk(cfg, reps, futures=0):
   tc = replace(cfg, seed=cfg.tune_seed)
-  O, V, g = [], [], []
+  O, V, g, ts = [], [], [], []
   for rep in reps:
     env, pol = Env(tc, rep), rule(tc)
     env.reset()
@@ -51,10 +60,11 @@ def walk(cfg, reps, futures=0):
       if t <= tc.T - tc.vf_H:
         O.append(env.o)
         g.append(rep)
+        ts.append(t)
         if futures:
           V.append(mc_value(env, R=futures, key=tkey))
       env.step(pol.act(env.o))
-  return O, (np.array(V) if futures else None), np.array(g)
+  return O, (np.array(V) if futures else None), np.array(g), np.array(ts)
 
 
 # 칸 데이터: 분할마다 관측·미래 행렬·반복 번호. pre = {분할: 미래 행렬}이면 미래를 다시 재지 않고 관측만 복원한다
@@ -64,12 +74,12 @@ def data(cfg, pre=None):
   for s, reps in sp.items():
     t0 = time.time()
     if pre and s in pre:
-      O, _, g = walk(cfg, reps)
+      O, _, g, t = walk(cfg, reps)
       V = np.asarray(pre[s])
       assert len(V) == len(O) and V.shape[1] >= k[s]
     else:
-      O, V, g = walk(cfg, reps, k[s])
-    out[s] = dict(O=O, V=V[:, :k[s]], g=g, y=target(V, k[s]))
+      O, V, g, t = walk(cfg, reps, k[s])
+    out[s] = dict(O=O, V=V[:, :k[s]], g=g, t=t, y=target(V, k[s]))
     sec[s] = time.time() - t0
   return out, sec
 
@@ -108,18 +118,34 @@ def select(cfg, name, tr, va):
   return k, rows
 
 
+# 학습한 모델 저장 (이후 retention value를 시뮬레이션 기준치와 비교할 때 다시 불러 쓴다)
+def save_model(m, path):
+  st = {k: v for k, v in m.__dict__.items() if k not in ("net", "enc", "cfg")}
+  st["cls"] = type(m).__name__
+  st["cfg"] = asdict(m.cfg) if hasattr(m, "cfg") else None
+  if hasattr(m, "net"):
+    st["net"] = m.net.state_dict()
+  path.parent.mkdir(parents=True, exist_ok=True)
+  torch.save(st, path)
+
+
 # 고른 설정을 초기화 seed 전부로 다시 학습해 시험 예측을 낸다 (시험은 여기서 처음 쓴다)
-def final(cfg, name, k, tr, va, te):
+# 시험 상태마다 가드 전 retention value(c_i = V(s) − V(s에서 i 제외))도 남기고 모델을 저장한다
+def final(cfg, name, k, tr, va, te, save_dir=None):
   lab, make, enc = grid(cfg, name)[k]
   Xt, Xv, Xs = (np.array([enc(o) for o in d["O"]]) for d in (tr, va, te))
-  preds, secs, eps = [], [], []
+  preds, secs, eps, cs = [], [], [], []
   for s in cfg.fair_seeds:
     t0 = time.time()
     m = fit(make(s), Xt, tr["y"], Xv, va["y"])
     secs.append(time.time() - t0)
     preds.append(m.predict(Xs))
     eps.append(getattr(m, "best_epoch", None))
-  return dict(config=lab, pred=np.array(preds), sec=secs, best_epoch=eps)
+    c = [raw(m, o) for o in te["O"]]
+    cs.append([dict(b=np.round(cb, 3).tolist(), s=np.round(cq, 3).tolist(), v=round(float(v), 3)) for cb, cq, v in c])
+    if save_dir:
+      save_model(m, save_dir / f"{name}_s{s}.pt")
+  return dict(config=lab, pred=np.array(preds), sec=secs, best_epoch=eps, coef=cs)
 
 
 # 시험 R²
@@ -148,7 +174,7 @@ def ceiling(V):
 
 
 # 칸 하나 전체: 데이터 → 모델별 선택 → 최종 5 seed → 부트스트랩
-def run_cell(cfg, pre=None, out=None):
+def run_cell(cfg, pre=None, out=None, save_dir=None):
   t0 = time.time()
   D, sec_data = data(cfg, pre)
   tr, va, te = D["train"], D["val"], D["test"]
@@ -160,17 +186,19 @@ def run_cell(cfg, pre=None, out=None):
     t1 = time.time()
     k, rows = select(cfg, name, tr, va)
     sec_sel = time.time() - t1
-    f = final(cfg, name, k, tr, va, te)
+    f = final(cfg, name, k, tr, va, te, save_dir)
     P[name] = f["pred"]
     tr2 = [r2(p, te["y"]) for p in f["pred"]]
     res["models"][name] = dict(pick=k, config=f["config"], edge=bool(k in (0, len(rows) - 1)) if name == "선형" else None,
                                select=rows, sec_select=sec_sel, sec_final=f["sec"], best_epoch_final=f["best_epoch"],
-                               test_r2=tr2, test_r2_mean=float(np.mean(tr2)), test_r2_sd=float(np.std(tr2, ddof=1)))
-    print(f"  {name}: 고른 설정 {f['config']} (검증 R² {rows[k]['val_r2']:.4f}) → 시험 R² {np.mean(tr2):.4f} ± {np.std(tr2, ddof=1):.4f} "
+                               test_r2=tr2, test_r2_mean=float(np.mean(tr2)), test_r2_sd=float(np.std(tr2, ddof=1)),
+                               test_coef=f["coef"])
+    print(f"  [{tag(cfg)}] {name}: 고른 설정 {f['config']} (검증 R² {rows[k]['val_r2']:.4f}) → 시험 R² {np.mean(tr2):.4f} ± {np.std(tr2, ddof=1):.4f} "
           f"| 선택 {sec_sel:.0f}s 최종 {sum(f['sec']):.0f}s", flush=True)
   res["boot"] = boot(cfg, P, te["y"], te["g"])
   res["test_pred"] = {n: P[n].tolist() for n in NAMES}
-  res["test_y"], res["test_g"] = te["y"].tolist(), te["g"].tolist()
+  res["test_y"], res["test_g"], res["test_t"] = te["y"].tolist(), te["g"].tolist(), te["t"].tolist()
+  res["test_ids"] = [dict(bid=[int(i) for i in o.bid], sid=[int(i) for i in o.sid]) for o in te["O"]]
   res["futures"] = {s: D[s]["V"].tolist() for s in D}
   res["sec"] = time.time() - t0
   if out:
@@ -178,16 +206,31 @@ def run_cell(cfg, pre=None, out=None):
   return res
 
 
+# 본 실험 칸 하나 (프로세스 작업): 결과 json이 이미 있으면 건너뛴다 (중단 후 재시작용)
+def job(cell):
+  cfg = cell_cfg(*cell)
+  out = diag.RUNS / f"exp5_{tag(cfg)}.json"
+  if out.exists():
+    return tag(cfg), "skip"
+  res = run_cell(cfg, out=out, save_dir=MODELS / tag(cfg))
+  return tag(cfg), f"{res['sec']:.0f}s"
+
+
 if __name__ == "__main__":
+  if "run" in sys.argv:
+    t0 = time.time()
+    with Pool(WORKERS, maxtasksperchild=1) as p:
+      for tg, msg in p.imap_unordered(job, CELLS):
+        print(f"done {tg} {msg} (경과 {time.time() - t0:.0f}s)", flush=True)
   # 점검: baseline 칸 하나. 학습·검증 미래는 4b에서 잰 것을 쓰되 반복 하나씩 다시 재서 같은지 확인하고, 시험은 새로 잰다
-  cfg = cell_cfg()
   if "check" in sys.argv:
+    cfg = cell_cfg()
     d4 = json.loads((diag.RUNS / "diag_s4b_train_m.json").read_text(encoding="utf-8"))
     sp = splits(cfg)
     Vtr, Vva = np.array(d4["Vtr"]), np.array(d4["Vva"])
     n_per = cfg.T - cfg.vf_H + 1
-    _, v0, _ = walk(cfg, [sp["train"][0]], cfg.tgt_M)
-    _, v1, _ = walk(cfg, [sp["val"][0]], cfg.val_M)
+    _, v0, _, _ = walk(cfg, [sp["train"][0]], cfg.tgt_M)
+    _, v1, _, _ = walk(cfg, [sp["val"][0]], cfg.val_M)
     same = bool(np.allclose(v0, Vtr[:n_per, :cfg.tgt_M]) and np.allclose(v1, Vva[:n_per, :cfg.val_M]))
     print(f"4b 미래 재현: {same}", flush=True)
     assert same

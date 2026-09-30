@@ -42,7 +42,7 @@ if __name__ == "__main__":
   src = json.loads(SRC.read_text(encoding="utf-8"))
   sp, D = splits(cfg), {}
   for s in ("train", "val", "test"):
-    O, _, g = walk(cfg, sp[s])
+    O, _, g, _ = walk(cfg, sp[s])
     V = np.array(src["futures"][s])
     D[s] = dict(O=O, g=g, y=V.mean(1))
   assert np.allclose(D["test"]["y"], src["test_y"])

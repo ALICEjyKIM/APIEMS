@@ -85,6 +85,9 @@ class Cfg:
   # 슬라이스 5 공정 비교 설계 (확정): 학습 반복 0~71(M = tgt_M) / 검증 72~89(M = val_M, 설정 선택) / 시험 90~107(M = val_M, 보고 전용)
   # 시험 반복은 vf_reps3 뒤 test_reps개이며 설정 선택에 전혀 쓰지 않는다
   test_reps: int = 18
+  # 최종 보고용 시험 반복의 시작: 90~107은 baseline 칸에서 용량 격자 판단(슬라이스 5b)에 한 번 써서 은퇴시켰다.
+  # 모든 칸이 같은 분할을 쓰도록 시험은 108~125로 둔다 (학습 0~71, 검증 72~89는 그대로)
+  test_rep0: int = 108
   # 튜닝 예산: 모델마다 설정 12개. 선형 λ 12점 (1e0~1e4 로그), MLP·GNN은 wd 6개 × 용량 2단계
   # GNN의 용량 단계는 각 nn_hidden의 MLP와 파라미터 수가 가장 가까운 은닉 크기다 (vfa/gnn.hidden)
   fair_lams: tuple = tuple(float(10 ** (4 * i / 11)) for i in range(12))
