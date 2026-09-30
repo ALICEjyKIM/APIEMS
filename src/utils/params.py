@@ -103,3 +103,20 @@ class Cfg:
   grb_seed: int = 0
   grb_threads: int = 1
   mip_gap: float = 1e-6
+
+# 새 규모 후보 (슬라이스 3에서 정함): 품목 15, 공급자 자리 24, n_alt 4, 묶음 2, 편중도 0.5.
+# Cfg 기본값(품목 6, 공급자 6)은 옛 결과 재현을 위해 그대로 두고, 이 preset을 dataclasses.replace로 적용한다.
+# occ와 기준 잉여율은 이 규모에서 고정점까지 다시 잰 값이다 (result/diag_s3_scaleup.py → runs/diag_s3_scaleup.json).
+# b_buy·b_sup은 두 점 기울기 (logit(ret_ref) − logit(ret_p0)) / r_ref로 r_ref에서 유도된다.
+SCALE15 = dict(
+  n_items=15,
+  n_sup=24,
+  n_alt=4,
+  items_per_order=2,
+  conc=0.5,
+  occ=0.6400000000000001,
+  r_ref_buy=0.10190486521550378,
+  r_ref_sup=0.11011390512275611,
+  b_buy=17.021768800928697,
+  b_sup=15.752788473484392,
+)

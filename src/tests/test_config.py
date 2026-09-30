@@ -4,7 +4,7 @@
 """
 import dataclasses
 import pytest
-from utils.params import Cfg
+from utils.params import Cfg, SCALE15
 from utils.common import rng, ret_u
 
 
@@ -24,6 +24,19 @@ def test_cfg_scale():
   assert cfg.reps == 30
   assert 0 <= cfg.conc <= 1
   assert cfg.n_alt <= cfg.n_sup <= cfg.n_items * cfg.n_alt
+
+
+# 새 규모 preset: Cfg 기본값을 바꾸지 않고, replace로 적용하면 자리 구조가 성립하며 두 점 기울기가 r_ref와 맞는다
+def test_scale15_preset():
+  import numpy as np
+  cfg = Cfg()
+  assert (cfg.n_items, cfg.n_sup, cfg.n_alt) == (6, 6, 2)  # 기본값은 그대로다
+  c = dataclasses.replace(cfg, **SCALE15)
+  assert (c.n_items, c.n_sup, c.n_alt, c.items_per_order) == (15, 24, 4, 2)
+  assert c.n_alt <= c.n_sup <= c.n_items * c.n_alt
+  assert 0 < c.occ < 1 and 0 < c.conc < 1
+  k = np.log(c.ret_ref / (1 - c.ret_ref)) - np.log(c.ret_p0 / (1 - c.ret_p0))
+  assert c.b_buy == pytest.approx(k / c.r_ref_buy) and c.b_sup == pytest.approx(k / c.r_ref_sup)
 
 
 # 같은 키는 같은 난수, 반복·스트림·키가 다르면 다른 난수
