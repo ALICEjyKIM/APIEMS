@@ -81,7 +81,7 @@ class Cfg:
   tgt_rep0: int = 2000000
   tgt_stride: int = 16
   val_M: int = 10  # 검증 타깃의 미래 rollout 수 (슬라이스 4에서 고정)
-  tgt_M: int = 1  # 학습 타깃의 미래 rollout 수 (슬라이스 4b에서 결정)
+  tgt_M: int = 5  # 학습 타깃의 미래 rollout 수 (슬라이스 4b에서 결정: M=5가 M=1·2보다 유의하게 낫다, runs/diag_s4b_train_m.json)
   lin_lams: tuple = (0.0, 0.1, 1.0, 10.0, 100.0)  # 선형 근사 릿지 λ 후보 (튜닝 예산 5개, MLP와 같게)
   # MLP: 은닉 nn_layers층 × nn_hidden, Adam nn_lr, 전체 배치 nn_epochs회, weight decay 후보 nn_wds (튜닝 예산 5개, 선형과 같게)
   nn_hidden: int = 64
