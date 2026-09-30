@@ -33,6 +33,7 @@ def test_scale15_preset():
   assert (cfg.n_items, cfg.n_sup, cfg.n_alt) == (6, 6, 2)  # 기본값은 그대로다
   c = dataclasses.replace(cfg, **SCALE15)
   assert (c.n_items, c.n_sup, c.n_alt, c.items_per_order) == (15, 24, 4, 2)
+  assert cfg.dir_alpha == 1.0 and c.dir_alpha > 1.0  # 기본은 기존 동작, preset은 용량을 고르게 나눈다
   assert c.n_alt <= c.n_sup <= c.n_items * c.n_alt
   assert 0 < c.occ < 1 and 0 < c.conc < 1
   k = np.log(c.ret_ref / (1 - c.ret_ref)) - np.log(c.ret_p0 / (1 - c.ret_p0))

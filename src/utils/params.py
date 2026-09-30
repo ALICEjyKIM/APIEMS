@@ -36,6 +36,9 @@ class Cfg:
   # False면 공급자마다 하나를 뽑는 기존 방식이다 (슬라이스 2~4의 diag_*·exp1_* 결과를 재현할 때 고정)
   price_rank: bool = True
   cover: float = 1.3  # 기대 실효 공급(품목별 총 공급용량 × 공급자 자리 점유율) / 안정 상태 수요
+  # 품목 용량을 대체 공급자들에게 나누는 Dirichlet 집중 파라미터. 총 공급량은 값과 무관하게 같고, 클수록 고르게 나뉜다.
+  # 1.0이면 기존 동작(단체 위 균등)이라 옛 결과가 그대로 재현된다
+  dir_alpha: float = 1.0
   occ: float = 0.6022222222222221  # 공급자 자리 점유율: 기준 몫 sh_ref로 운영한 튜닝용 반복의 실측값 (bench/tune.measure로 한 번 재서 고정)
   ret_ss: float = 0.5
   p_sup_new: float = 0.25  # 빈 공급자 자리 충원 확률 (빈자리 평균 4기간). 새 공급자 검증·계약·등록에 시간이 걸리고, 충원이 빠르면 공급자를 잃는 손해가 없어 유지 가치가 의미를 잃는다
@@ -108,15 +111,17 @@ class Cfg:
 # Cfg 기본값(품목 6, 공급자 6)은 옛 결과 재현을 위해 그대로 두고, 이 preset을 dataclasses.replace로 적용한다.
 # occ와 기준 잉여율은 이 규모에서 고정점까지 다시 잰 값이다 (result/diag_s3_scaleup.py → runs/diag_s3_scaleup.json).
 # b_buy·b_sup은 두 점 기울기 (logit(ret_ref) − logit(ret_p0)) / r_ref로 r_ref에서 유도된다.
+# dir_alpha 5는 용량 꼬리만 자르고 공급자 간 규모 차이는 남기는 값이다 (result/diag_s3b_alpha.py → runs/diag_s3b_alpha.json).
 SCALE15 = dict(
   n_items=15,
   n_sup=24,
   n_alt=4,
   items_per_order=2,
   conc=0.5,
-  occ=0.6400000000000001,
-  r_ref_buy=0.10190486521550378,
-  r_ref_sup=0.11011390512275611,
-  b_buy=17.021768800928697,
-  b_sup=15.752788473484392,
+  dir_alpha=5.0,
+  occ=0.6530555555555556,
+  r_ref_buy=0.10308345926154251,
+  r_ref_sup=0.11525964887763726,
+  b_buy=16.827152171786267,
+  b_sup=15.049508412346505,
 )

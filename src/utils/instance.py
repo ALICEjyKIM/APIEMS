@@ -67,6 +67,7 @@ def _slots(cfg, g):
 
 
 # 반복 rep의 인스턴스: 기준가, 공급자 자리 구조와 용량(안정 상태 활동 주문자 수요 × cover ÷ 실측 공급자 자리 점유율 occ), 기간 0 공급자
+# 품목 용량은 대체 공급자들에게 Dirichlet(dir_alpha)로 나눈다 (합은 tot로 고정, dir_alpha가 크면 고르게)
 # 가격 수준은 price_rank면 용량과 같은 방식으로 (품목, 순번)마다 뽑아 품목에 공급자 자리 순서대로 준다
 def make(cfg, rep):
   g = rng(cfg, rep, "inst")
@@ -78,7 +79,7 @@ def make(cfg, rep):
   tot = round(cfg.cover * dem / cfg.occ)
   cap = np.zeros(items.shape, int)
   for i in range(cfg.n_items):
-    cap[items[:, i], i] = 1 + g.multinomial(tot - cfg.n_alt, g.dirichlet(np.ones(cfg.n_alt)))
+    cap[items[:, i], i] = 1 + g.multinomial(tot - cfg.n_alt, g.dirichlet(np.full(cfg.n_alt, cfg.dir_alpha)))
   inst = Inst(base, items, cap)
   if cfg.price_rank:
     lvl, U = np.zeros(items.shape), g.uniform(cfg.cost_lo, cfg.cost_hi, (cfg.n_items, cfg.n_alt))
