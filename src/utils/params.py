@@ -82,6 +82,20 @@ class Cfg:
   tgt_stride: int = 16
   val_M: int = 10  # 검증 타깃의 미래 rollout 수 (슬라이스 4에서 고정)
   tgt_M: int = 5  # 학습 타깃의 미래 rollout 수 (슬라이스 4b에서 결정: M=5가 M=1·2보다 유의하게 낫다, runs/diag_s4b_train_m.json)
+  # 슬라이스 5 공정 비교 설계 (확정): 학습 반복 0~71(M = tgt_M) / 검증 72~89(M = val_M, 설정 선택) / 시험 90~107(M = val_M, 보고 전용)
+  # 시험 반복은 vf_reps3 뒤 test_reps개이며 설정 선택에 전혀 쓰지 않는다
+  test_reps: int = 18
+  # 튜닝 예산: 모델마다 설정 12개. 선형 λ 12점 (1e0~1e4 로그), MLP·GNN은 wd 6개 × 용량 2단계
+  # GNN의 용량 단계는 각 nn_hidden의 MLP와 파라미터 수가 가장 가까운 은닉 크기다 (vfa/gnn.hidden)
+  fair_lams: tuple = tuple(float(10 ** (4 * i / 11)) for i in range(12))
+  fair_wds: tuple = (0.0, 1e-3, 3e-3, 1e-2, 3e-2, 0.1)
+  fair_hidden: tuple = (32, 64)
+  # 조기 종료 (MLP·GNN 공통): es_epochs까지 es_every에폭마다 검증 MSE를 재고 최소였던 에폭의 가중치로 되돌린다
+  es_epochs: int = 1000
+  es_every: int = 25
+  # 초기화 seed: 선택은 첫 seed 하나로, 고른 설정을 전부로 다시 학습한다. 시험 반복 블록 부트스트랩 횟수
+  fair_seeds: tuple = (0, 1, 2, 3, 4)
+  boot_B: int = 2000
   lin_lams: tuple = (0.0, 0.1, 1.0, 10.0, 100.0)  # 선형 근사 릿지 λ 후보 (튜닝 예산 5개, MLP와 같게)
   # MLP: 은닉 nn_layers층 × nn_hidden, Adam nn_lr, 전체 배치 nn_epochs회, weight decay 후보 nn_wds (튜닝 예산 5개, 선형과 같게)
   nn_hidden: int = 64

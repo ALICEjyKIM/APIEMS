@@ -103,3 +103,14 @@ def test_gnn_raw_coef():
   cb, cs, v = raw(m, o)
   assert len(cb) == len(o.bid) and len(cs) == len(o.sid)
   assert cs[0] == pytest.approx(v - m.predict(graph(cfg, drop(o, "sup", 0))[None])[0], abs=1e-3)  # float32 배치·단건 차이
+
+
+# 조기 종료 (GNN): MLP와 같은 규칙으로 곡선을 남기고 최소 에폭 가중치로 되돌린다
+def test_gnn_early_stop():
+  cfg = replace(CFG, T=6, vf_H=2, vf_reps=4, nn_epochs=60, es_every=10)
+  O, y, g = collect_obs(cfg)
+  X = np.array([graph(cfg, o) for o in O])
+  va = val_mask(cfg, g)
+  m = GNN(cfg, 0.0).fit(X[~va], y[~va], X[va], y[va])
+  assert len(m.val_curve) == 6 and m.best_epoch in range(10, 61, 10)
+  assert np.mean((m.predict(X[va]) - y[va]) ** 2) == pytest.approx(min(m.val_curve), rel=1e-5)

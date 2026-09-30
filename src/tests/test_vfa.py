@@ -277,3 +277,17 @@ def test_mlp_policy_runs():
   assert np.isfinite(v) and np.isfinite(cb).all() and np.isfinite(cs).all()
   out = rollout(cfg, vfa_policy(cfg, m), 0)
   assert out["profit"] >= 0 and 0 < out["fill"] <= 1
+
+
+# 조기 종료 (MLP): 검증 데이터를 주면 es_every마다 곡선을 남기고 최소 에폭 가중치로 되돌린다. 안 주면 기존과 같다
+def test_mlp_early_stop():
+  g = np.random.default_rng(5)
+  X = g.normal(size=(300, 6))
+  y = X[:, 0] * X[:, 1] * 3 + g.normal(size=300)
+  cfg = replace(CFG, nn_epochs=200, es_every=20)
+  tr = np.arange(300) < 240
+  m = MLP(cfg, 0.0).fit(X[tr], y[tr], X[~tr], y[~tr])
+  assert len(m.val_curve) == 200 // 20 and m.best_epoch % 20 == 0
+  assert np.mean((m.predict(X[~tr]) - y[~tr]) ** 2) == pytest.approx(min(m.val_curve), rel=1e-6)
+  a, b = MLP(cfg, 0.0).fit(X[tr], y[tr]), MLP(cfg, 0.0).fit(X[tr], y[tr])
+  assert a.best_epoch is None and np.array_equal(a.predict(X), b.predict(X))

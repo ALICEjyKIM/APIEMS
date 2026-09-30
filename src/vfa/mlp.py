@@ -17,7 +17,8 @@ class MLP:
     self.cfg, self.wd = cfg, wd
 
   # 학습: 표준화(표준편차 0인 지표는 그대로) 후 평균제곱오차를 전체 배치로 최소화
-  def fit(self, X, y):
+  # Xv·yv를 주면 es_every에폭마다 검증 MSE를 재고 최소였던 에폭의 가중치로 되돌린다 (조기 종료, GNN과 같은 규칙)
+  def fit(self, X, y, Xv=None, yv=None):
     c = self.cfg
     torch.set_num_threads(1)
     torch.manual_seed(c.nn_seed)
@@ -29,10 +30,13 @@ class MLP:
     Z = torch.tensor((X - self.mu) / self.sd, dtype=torch.float32)
     t = torch.tensor((y - self.ym) / self.ys, dtype=torch.float32)[:, None]
     opt = torch.optim.Adam(self.net.parameters(), lr=c.nn_lr, weight_decay=self.wd)
-    for _ in range(c.nn_epochs):
+    stop = train.EarlyStop(self, Xv, yv)
+    for e in range(c.nn_epochs):
       opt.zero_grad()
       ((self.net(Z) - t) ** 2).mean().backward()
       opt.step()
+      stop.check(e + 1)
+    stop.restore()
     return self
 
   # 가치 예측

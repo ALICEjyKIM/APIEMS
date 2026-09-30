@@ -3,6 +3,7 @@
 미래가치 타깃은 같은 상태에서 미래 키만 바꾼 rollout M개의 Monte Carlo 평균이다 (collect_futures → target).
 검증 분할(학습 반복의 뒤 vf_val 비율)과 설정 선택(select)은 모든 근사 방법이 같은 것을 쓴다.
 """
+import copy
 from dataclasses import replace
 import numpy as np
 from env.platform import Env
@@ -77,3 +78,29 @@ def select(cfg, make, grid, X, y, g):
   mse = {a: float(np.mean((make(a).fit(X[~va], y[~va]).predict(X[va]) - y[va]) ** 2)) for a in grid}
   a = min(mse, key=mse.get)
   return make(a).fit(X, y), mse
+
+
+class EarlyStop:
+  """조기 종료 (MLP·GNN 공통 규칙).
+  검증 데이터가 있으면 es_every에폭마다 검증 MSE를 재고, 최소였던 에폭의 가중치를 보관했다가 학습 뒤 되돌린다.
+  검증 데이터가 없으면 아무것도 하지 않는다 (기존 고정 에폭 학습과 같음). 곡선·최적 에폭은 모델에 남긴다.
+  """
+
+  def __init__(self, model, Xv, yv):
+    self.m, self.Xv, self.yv = model, Xv, yv
+    self.best, self.state = float("inf"), None
+    model.val_curve, model.best_epoch = [], None
+
+  # 에폭 e가 끝난 뒤: es_every의 배수면 검증 MSE를 재고 최소면 가중치를 보관한다
+  def check(self, e):
+    if self.Xv is None or e % self.m.cfg.es_every:
+      return
+    mse = float(np.mean((self.m.predict(self.Xv) - self.yv) ** 2))
+    self.m.val_curve.append(mse)
+    if mse < self.best:
+      self.best, self.state, self.m.best_epoch = mse, copy.deepcopy(self.m.net.state_dict()), e
+
+  # 최소였던 에폭의 가중치로 되돌린다
+  def restore(self):
+    if self.state is not None:
+      self.m.net.load_state_dict(self.state)
