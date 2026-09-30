@@ -20,7 +20,10 @@ def build(cfg, o, split=None, resp=None, c=None):
   m.Params.Seed = cfg.grb_seed
   m.Params.Threads = cfg.grb_threads
   m.Params.MIPGap = cfg.mip_gap
-  x = m.addMVar((len(o.q), len(o.cap), o.q.shape[1]), vtype=GRB.INTEGER, ub=np.minimum(o.q[:, None], o.cap[None]))
+
+  x = m.addMVar((len(o.q), len(o.cap), o.q.shape[1]), 
+                vtype=GRB.INTEGER, 
+                ub=np.minimum(o.q[:, None], o.cap[None]))
   y = m.addMVar(len(o.q), vtype=GRB.BINARY)
   u, v = m.addMVar(len(o.q)), m.addMVar(len(o.cap))
   mg = (o.p[:, None] - o.c[None]) * x
