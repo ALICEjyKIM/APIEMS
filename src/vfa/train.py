@@ -1,11 +1,13 @@
 """가치 근사 학습 데이터.
-튜닝 seed(평가 seed와 분리)에서 후속 정책(규칙 기반, Cfg 몫)으로 돌린 rollout의 (시장 요약 지표, 이후 vf_H기간 이윤 합)을 모은다.
+튜닝 seed(평가 seed와 분리)에서 후속 정책(규칙 기반, Cfg 몫)으로 돌린 rollout의 (시장 요약 지표, 미래가치 타깃)을 모은다.
+미래가치 타깃은 같은 상태에서 미래 키만 바꾼 rollout M개의 Monte Carlo 평균이다 (collect_futures → target).
 검증 분할(학습 반복의 뒤 vf_val 비율)과 설정 선택(select)은 모든 근사 방법이 같은 것을 쓴다.
 """
 from dataclasses import replace
 import numpy as np
 from env.platform import Env
 from bench.rule_split import rule
+from match.mc_value import mc_value
 from utils.features import phi
 
 
@@ -26,6 +28,36 @@ def collect_obs(cfg):
       y.append(sum(pr[t:t + tc.vf_H]))
       g.append(rep)
   return O, np.array(y), np.array(g)
+
+
+# 미래가치 타깃용 미래 키: mc_value의 기준치 키(mc_rep0 계열)와 분리된 스트림
+# stride가 쓰는 M보다 크므로 옆 상태와 겹치지 않고, 학습·검증은 반복이 달라 서로 겹칠 수 없다
+def tkey(cfg, rep, t, k):
+  return cfg.tgt_rep0 + (rep * cfg.T + t) * cfg.tgt_stride + k
+
+
+# 튜닝 seed 규칙 기반 궤적을 반복 reps로 돌며 상태를 모으고, 상태마다 미래 k_max개의 vf_H기간 이윤 합을 잰다
+# → (관측 목록, 상태 × 미래 행렬, 반복 번호). 창이 T 안에 드는 t ≤ T − vf_H만 쓴다
+# 앞쪽 미래가 M에 무관하게 같으므로 target(V, M)으로 M별 타깃을 같은 표본에서 만들 수 있다
+def collect_futures(cfg, k_max, reps=None):
+  tc = replace(cfg, seed=cfg.tune_seed)
+  assert k_max <= tc.tgt_stride
+  O, V, g = [], [], []
+  for rep in (range(tc.vf_reps) if reps is None else reps):
+    env, pol = Env(tc, rep), rule(tc)
+    env.reset()
+    for t in range(tc.T):
+      if t <= tc.T - tc.vf_H:
+        O.append(env.o)
+        V.append(mc_value(env, R=k_max, key=tkey))
+        g.append(rep)
+      env.step(pol.act(env.o))
+  return O, np.array(V), np.array(g)
+
+
+# 상태 × 미래 행렬에서 앞 M개 평균 타깃
+def target(V, m):
+  return V[:, :m].mean(1)
 
 
 # 시장 요약 지표 학습 데이터 (지표 행렬, 이후 vf_H기간 이윤 합, 반복 번호)

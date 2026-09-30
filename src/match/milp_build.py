@@ -28,6 +28,7 @@ def build(cfg, o, split=None, resp=None, c=None):
   u, v = m.addMVar(len(o.q)), m.addMVar(len(o.cap))
   mg = (o.p[:, None] - o.c[None]) * x
   g, mj = mg.sum(2).sum(1), mg.sum(2).sum(0)
+
   m.addConstr(x.sum(1) == o.q * y[:, None])
   m.addConstr(x.sum(0) <= o.cap)
   if split:
@@ -36,14 +37,17 @@ def build(cfg, o, split=None, resp=None, c=None):
   else:
     m.addConstr(u <= g)
     m.addConstr(v <= mj)
+
   prof = mg.sum() - cfg.f_ship * y.sum() - u.sum() - v.sum()
   m.addConstr(prof >= 0)
   obj = prof
+
   for kind, s, w, ck in zip(("buy", "sup"), (u, v), worth(o), c or ()):
     r, p = points(cfg, resp, kind)
     pv = m.addMVar(len(w))
     for sk, pk, wk in zip(s.tolist(), pv.tolist(), w):
       m.addGenConstrPWL(sk, pk, wk * r, p)
     obj = obj + ck @ pv
+
   m.setObjective(obj, GRB.MAXIMIZE)
   return m, x, u, v

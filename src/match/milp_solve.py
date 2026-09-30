@@ -17,7 +17,7 @@ class Policy:
   def __init__(self, cfg, resp=None, split=None, coef=None):
     self.cfg, self.resp, self.split, self.coef = cfg, resp or Logistic(cfg), split, coef
 
-  # 반복 rep 시작
+  # 반복 rep 시작: 몇번째 simulation repetition인지 저장
   def reset(self, rep):
     self.rep = rep
 
@@ -26,9 +26,11 @@ class Policy:
   def act(self, o):
     m, x, u, v = build(self.cfg, o, self.split, self.resp, self.coef and self.coef(o))
     m.optimize()
+    # 정말 최적해를 찾았는지 확인
     assert m.Status == GRB.OPTIMAL
     self.obj = m.ObjVal
     x = np.rint(x.X).astype(int)
+    # 실제 배경결과로 마진 다시 계산
     mg = (o.p[:, None] - o.c[None]) * x
     g, mj = mg.sum((1, 2)), mg.sum((0, 2))
     if self.split:

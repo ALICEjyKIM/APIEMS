@@ -14,12 +14,13 @@ def fkey(cfg, rep, t, k):
 
 
 # 환경 env의 현재 상태에서 R개(None이면 mc_R) 미래 각각의 후속 정책 vf_H기간 이윤 합 (drop = (종류, 행)이면 그 참여자를 뺀 상태에서)
-# 미래 키는 mc_R 간격으로 잡아 R이 달라도 앞쪽 미래가 같다. env는 바꾸지 않는다
-def mc_value(env, drop=None, R=None):
+# 미래 키는 key(cfg, rep, t, k)로 잡고 R이 달라도 앞쪽 미래가 같다 (기본은 기준치 키 fkey). env는 바꾸지 않는다
+def mc_value(env, drop=None, R=None, key=None):
   cfg, out = env.cfg, []
+  key = key or fkey
   for k in range(R or cfg.mc_R):
     e = copy.deepcopy(env)
-    e.rep = fkey(cfg, env.rep, env.t, k)
+    e.rep = key(cfg, env.rep, env.t, k)
     if drop:
       e.drop(*drop)
     pol = rule(cfg)

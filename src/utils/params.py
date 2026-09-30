@@ -75,6 +75,13 @@ class Cfg:
   mc_R: int = 10
   mc_rep0: int = 1000000
   vf_val: float = 0.2  # 검증 분할: 학습 반복의 뒤 비율 (모든 근사 방법 공통)
+  # 미래가치 타깃은 같은 상태에서 미래 키만 바꾼 rollout의 Monte Carlo 평균이다 (슬라이스 4).
+  # 키 = tgt_rep0 + (rep × T + t) × tgt_stride + k. mc_value의 기준치 키(mc_rep0 계열)와 분리된 스트림이며,
+  # stride가 tgt_M·val_M보다 크므로 옆 상태와 겹치지 않는다. 학습·검증은 반복이 달라 서로 겹칠 수 없다
+  tgt_rep0: int = 2000000
+  tgt_stride: int = 16
+  val_M: int = 10  # 검증 타깃의 미래 rollout 수 (슬라이스 4에서 고정)
+  tgt_M: int = 1  # 학습 타깃의 미래 rollout 수 (슬라이스 4b에서 결정)
   lin_lams: tuple = (0.0, 0.1, 1.0, 10.0, 100.0)  # 선형 근사 릿지 λ 후보 (튜닝 예산 5개, MLP와 같게)
   # MLP: 은닉 nn_layers층 × nn_hidden, Adam nn_lr, 전체 배치 nn_epochs회, weight decay 후보 nn_wds (튜닝 예산 5개, 선형과 같게)
   nn_hidden: int = 64
