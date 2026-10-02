@@ -151,3 +151,54 @@ def test_retention_value_rollout():
     r = env.step(pol.act(env.o))
     sb += r["sb"].sum() + r["ss"].sum()
   assert sb > 0
+
+
+# 한쪽 몫만 고정 (유지 가치 0): 고정한 쪽은 마진의 몫, 자유인 쪽은 0, 플랫폼은 나머지를 가져간다
+@pytest.mark.parametrize("split", [(CFG.sh_buy, None), (None, CFG.sh_sup)])
+def test_one_sided_split(split):
+  pol, o = Policy(CFG, split=split), split_obs()
+  x, u, v = pol.act(o)
+  assert x.tolist() == [[[6, 0], [4, 0]]]
+  fb, fs = split
+  assert u == pytest.approx([0 if fb is None else fb * 92])
+  assert v == pytest.approx([0, 0] if fs is None else [fs * 60, fs * 32])
+  assert pol.obj == pytest.approx((1 - (fb or 0) - (fs or 0)) * 92 - CFG.f_ship)
+  assert settle(CFG, o, (x, u, v))["ok"].tolist() == [True]
+
+
+# 주문자 몫 고정 + 공급자 유지 가치: 주문자 잉여 = 몫 × 100, 공급자 잉여는 꺾인 점 전수 탐색 argmax(−s + c·PWL(s)) (s ≤ 75 − 주문자 잉여)
+@pytest.mark.parametrize("c", [0.0, 50.0, 100.0, 300.0])
+def test_buyer_fixed_supplier_coef(c):
+  o, f = one_obs(), Logistic(CFG)
+  w = worth(o)[1][0]
+  r, p = points(CFG, f, "sup")
+  room = 75 - CFG.sh_buy * 100
+  cand = np.r_[w * r[w * r <= room], room]
+  val = -cand + c * np.interp(cand, w * r, p)
+  pol = Policy(CFG, split=(CFG.sh_buy, None), coef=lambda o: (np.zeros(1), np.array([c])))
+  x, u, v = pol.act(o)
+  assert x.tolist() == [[[10]]]
+  assert u[0] == pytest.approx(CFG.sh_buy * 100) and v[0] == pytest.approx(cand[np.argmax(val)], abs=1e-6)
+  assert pol.obj == pytest.approx(room + val.max())
+
+
+# 한쪽 몫 고정 정책도 모든 기간 최적해이고 결정이 환경 검사를 통과하며, 주문자 잉여는 매 기간 성립 마진의 고정 몫이다
+# 공급자 유지 가치가 0이면 목적함수 값 = 환경 정산 이윤
+@pytest.mark.parametrize("cs", [0.0, 100.0])
+@pytest.mark.parametrize("k", [1, 3])
+@pytest.mark.parametrize("conc", [0.0, 1.0])
+def test_one_sided_matches_env(k, conc, cs):
+  cfg = replace(CFG, items_per_order=k, conc=conc)
+  env = Env(cfg, 0)
+  pol = Policy(cfg, split=(cfg.sh_buy, None), coef=lambda o: (np.zeros(len(o.bid)), np.full(len(o.sid), cs)))
+  env.reset()
+  pol.reset(0)
+  for _ in range(cfg.T):
+    o = env.o
+    d = pol.act(o)
+    r = env.step(d)
+    g = ((o.p[:, None] - o.c[None]) * d[0]).sum((1, 2))
+    assert np.allclose(r["sb"], cfg.sh_buy * g)
+    assert r["profit"] >= -cfg.tol
+    if cs == 0:
+      assert r["profit"] == pytest.approx(pol.obj, abs=1e-6)

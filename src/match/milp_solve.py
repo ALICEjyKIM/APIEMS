@@ -22,7 +22,7 @@ class Policy:
     self.rep = rep
 
   # 기간 결정: 최적해의 (배정 수량 x[b,j,i], 주문자 잉여, 공급자 잉여)
-  # 잉여는 반올림한 x의 마진에 맞춘다 (규칙 기반은 고정 비율 그대로, 나머지는 [0, 마진]으로 자름): 솔버 허용오차(1e-5) 정리
+  # 잉여는 반올림한 x의 마진에 맞춘다 (고정 몫인 쪽은 비율 그대로, 자유인 쪽은 [0, 마진]으로 자름): 솔버 허용오차(1e-5) 정리
   def act(self, o):
     m, x, u, v = build(self.cfg, o, self.split, self.resp, self.coef and self.coef(o))
     m.optimize()
@@ -33,9 +33,8 @@ class Policy:
     # 실제 배경결과로 마진 다시 계산
     mg = (o.p[:, None] - o.c[None]) * x
     g, mj = mg.sum((1, 2)), mg.sum((0, 2))
-    if self.split:
-      return x, self.split[0] * g, self.split[1] * mj
-    return x, np.clip(u.X, 0, g), np.clip(v.X, 0, mj)
+    sb, ss = self.split or (None, None)
+    return (x, np.clip(u.X, 0, g) if sb is None else sb * g, np.clip(v.X, 0, mj) if ss is None else ss * mj)
 
   # 정산 결과 관찰 (아직 쓰지 않음)
   def observe(self, r):

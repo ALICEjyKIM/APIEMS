@@ -1257,6 +1257,39 @@ GNN − MLP 유의 칸 수 (좋음/나쁨, 18칸 중)
 
 결정: GNN 기반 가치 근사를 핵심 novelty로 더 확장하지 않는다. 연구를 매칭·잉여배분 메커니즘 중심으로 옮길 수 있게 여기서 멈춘다.
 
+### 실험 7: oracle c의 의사결정 가치 (설계 확정 2026-10-02, 파일럿 전)
+
+질문: 공급자별 c를 MC로 정확히 재서 MILP에 넣으면 누적 플랫폼 이윤이 실제로 좋아지는가? 모델 학습 없음, 목적함수 profit + Σ c_i p_i 그대로.
+
+용어: Oracle-c는 진정한 최적 oracle이 아니다. 매 기간 그 상태에서 Rule을 10기간 이어 간다고 보고 잰 MC marginal value(M = 10)를 쓰는 benchmark다.
+Oracle-c ≈ Myopic-sup이 나와도 "Rule 후속 가치로 한 번 개선하는 방식"이 이득이 없다는 뜻까지만 말한다. 공급자 MC c의 신뢰도는 0.73이다 (실험 6).
+
+정책 (모든 정책이 같은 MILP, 같은 평가 반복·공통 난수)
+- 주문자 잉여는 몫 0.3으로 고정한다 (split = (0.3, None)). 공급자 쪽만 비교하려는 설계다.
+- Myopic-sup: 공급자 c = 0. 주 비교 기준.
+- Uniform-c: 상태 내 공급자 c^MC 평균을 모두에게. Oracle-c: c^MC 그대로. Shuffled: c^MC를 상태 내에서 무작위로 섞음 (순열 난수 키 (seed, rep, t)).
+- oracle류 c에는 가드를 쓰지 않는다. 각 정책은 자기 경로의 상태에서 매 기간 c를 새로 잰다 (키 tkey(rep, t, k), 같은 반복·기간이면 정책이 달라도 같은 미래 키).
+- 참고용: Rule (0.3, 0.3), 완전 Myopic (양쪽 c = 0, 잉여 자유).
+
+칸: alt4·conc0.5·k2 (기준), alt3·conc1·k3, alt3·conc1·k1, alt3·conc0·k3, alt4·conc0·k1 (효과가 작을 것으로 보는 대조).
+n_alt 3 위주 선택은 공급자 손실이 큰 쪽이라 효과를 찾기 쉬운 선택이다.
+
+지표: 누적 플랫폼 이윤(30기간 주 지표, 기간 0~19 민감도), 주문 충족률, 주문자·공급자 재참여율, 지급 잉여, 공급자 잉여 HHI,
+c를 재는 정책에서 상태 내 c 상위 3 공급자의 잉여 비중과 재참여율.
+
+비교와 판정: 반복 단위 짝지은 누적 이윤 차이의 95% CI (t 구간, 반복 bootstrap 병기), 칸별. CI가 0을 벗어나면 차이 있음.
+쌍: Uniform − Myopic-sup (재참여 고려 자체), Oracle − Uniform (공급자 구분), Oracle − Shuffled (올바른 공급자에게 높은 c), 참고로 Oracle − Rule, Oracle − Myopic.
+세 경우 (Oracle ≈ Myopic-sup / Oracle > Myopic-sup이고 Uniform ≈ Oracle / Oracle > Uniform·Myopic-sup)를 칸마다 판정하고 갈리면 갈린 그대로 보고한다.
+
+반복 수: 평가 seed(0)의 반복 0부터. 파일럿 = 기준 칸 × 10반복 × (Uniform, Oracle, Shuffled) + 싼 정책들.
+본 실험 반복 수 n = clip(⌈(t_{0.975} · sd_d / h)²⌉, 10, 30), h = Myopic-sup 평균 누적 이윤의 2%, sd_d = 파일럿에서 세 주요 쌍 중 가장 큰 짝지은 차이 표준편차.
+파일럿 반복은 본 실험 기준 칸에 포함한다.
+
+잡음 사다리 (조건부): 본 실험에서 Oracle > Uniform인 칸에서만 ρ ∈ {0.4, 0.7}, c' = mean + sd·(ρ·z + √(1−ρ²)·ε).
+
+코드: `split = (0.3, None)`처럼 한쪽 몫만 고정할 수 있게 `match/milp_build.py`, `match/milp_solve.py`를 고쳤다.
+기존 경로(양쪽 고정, 양쪽 자유, 유지 가치 있음)는 SCALE15 두 칸 × 3정책의 30기간 rollout 지표가 수정 전과 완전히 같았다.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.

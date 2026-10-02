@@ -13,6 +13,7 @@ ENV = gp.Env(params={"OutputFlag": 0})
 
 # 관측 o의 MILP: x[b,j,i] = 공급자 j가 주문 b의 품목 i에 보내는 수량, y[b] = 주문 b 성립, u·v = 주문자·공급자 잉여
 # split = (주문자 몫, 공급자 몫)이면 잉여를 마진의 고정 비율로 묶고(규칙 기반), None이면 [0, 자기 거래 마진]에서 고른다
+# 한쪽 몫만 None이면 (예: (0.3, None)) 그쪽만 자유로 두고 다른 쪽은 고정 비율로 묶는다
 # c = (주문자 유지 가치, 공급자 유지 가치)이면 반응 함수 resp의 구간선형 재참여확률 항을 더한다 (None이면 유지 가치 0)
 def build(cfg, o, split=None, resp=None, c=None):
   m = gp.Model(env=ENV)
@@ -31,12 +32,8 @@ def build(cfg, o, split=None, resp=None, c=None):
 
   m.addConstr(x.sum(1) == o.q * y[:, None])
   m.addConstr(x.sum(0) <= o.cap)
-  if split:
-    m.addConstr(u == split[0] * g)
-    m.addConstr(v == split[1] * mj)
-  else:
-    m.addConstr(u <= g)
-    m.addConstr(v <= mj)
+  for s, sh, gs in zip((u, v), split or (None, None), (g, mj)):
+    m.addConstr(s <= gs if sh is None else s == sh * gs)
 
   prof = mg.sum() - cfg.f_ship * y.sum() - u.sum() - v.sum()
   m.addConstr(prof >= 0)
