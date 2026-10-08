@@ -5,7 +5,7 @@
 import numpy as np
 from gurobipy import GRB
 from match.milp_build import build
-from env.response import Logistic
+from env.response import response
 
 
 class Policy:
@@ -15,7 +15,7 @@ class Policy:
   """
 
   def __init__(self, cfg, resp=None, split=None, coef=None):
-    self.cfg, self.resp, self.split, self.coef = cfg, resp or Logistic(cfg), split, coef
+    self.cfg, self.resp, self.split, self.coef = cfg, resp or response(cfg), split, coef
 
   # 반복 rep 시작: 몇번째 simulation repetition인지 저장
   def reset(self, rep):

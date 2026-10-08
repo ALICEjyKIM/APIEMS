@@ -1,13 +1,15 @@
 """플랫폼 시장 환경.
 매 기간 신규 주문자가 도착하고 공급자가 공급을 제안하며, 정책의 결정을 검사해 이윤을 정산한다.
 정산 후 참여자는 배분 잉여에 따른 재참여 확률로 남거나 떠나고, 빈 공급자 자리는 새 공급자가 채운다.
+cfg.market == "v2"면 Env(cfg, rep)가 Env2(조달 시장 v2)를 만든다: 새 후보 공급자가 onboarding 지연 뒤 자리를 채우고 재참여에 경험이 들어간다.
 """
 from dataclasses import dataclass
 import numpy as np
 from utils.instance import make
 from utils.arrivals import new_buyers, new_sups, perturb
 from utils.common import ret_u
-from env.response import Logistic
+from env.response import response
+from utils.market2 import make2, candidate
 
 
 @dataclass
@@ -15,6 +17,7 @@ class Obs:
   """기간 t에 정책이 보는 시장.
   q·p: 주문자별 품목 요구수량·제안가격 (B×I), cap·c: 공급자별 품목 공급가능량·공급가격 (J×I).
   bid·sid: 행 순서대로의 주문자·공급자 식별자, rb·rs: 참여자별 직전 기간 재참여확률 (신규 참여자는 잉여 0의 값).
+  pend·wait: v2에서 onboarding 중인 후보의 품목별 공급가능량과 활동까지 남은 기간 (legacy는 None).
   """
   t: int
   q: np.ndarray
@@ -25,6 +28,8 @@ class Obs:
   sid: list
   rb: np.ndarray = None
   rs: np.ndarray = None
+  pend: np.ndarray = None
+  wait: np.ndarray = None
 
 
 # 참여자 프로필 목록 → (수량, 가격) 행렬 (참여자가 없으면 0행)
@@ -61,9 +66,13 @@ class Env:
   도착·변동·재참여 난수가 기간·참여자로 키가 잡혀 있어 결정이 달라도 같은 참여자에게 같은 난수가 쓰인다 (공통 난수).
   """
 
+  # cfg.market == "v2"면 Env2를 만든다 (deepcopy는 인자 없이 부른다)
+  def __new__(cls, cfg=None, rep=None, resp=None):
+    return super().__new__(Env2 if cls is Env and cfg is not None and cfg.market == "v2" else cls)
+
   def __init__(self, cfg, rep, resp=None):
     self.cfg, self.rep = cfg, rep
-    self.resp = resp or Logistic(cfg)
+    self.resp = resp or response(cfg)
     self.inst = make(cfg, rep)
 
   # 기간 0 시장: 기간 0 공급자(번호 = 자리)와 신규 주문자
@@ -119,4 +128,69 @@ class Env:
     self._arrive()
     r.update(n_buy=len(o.bid), stay_buy=len(set(o.bid) & set(self.o.bid)),
              n_sup=len(o.sid), stay_sup=len(set(o.sid) & set(self.o.sid)))
+    return r
+
+
+class Env2(Env):
+  """조달 시장 v2의 한 반복 (Env(cfg, rep)가 cfg.market == "v2"일 때 만든다).
+  기간 t에 떠난 공급자 자리는 새로 생성한 후보(품목·용량·가격이 새것)가 t + onboard부터 채우고, 그동안 후보는 pend·wait로만 보인다.
+  재참여는 잉여율과 경험(주문자 성립, 공급자 거래 배정)에 의존하고, step은 배정·경험·잔류 결과를 원자료로 함께 돌려준다.
+  """
+
+  def __init__(self, cfg, rep, resp=None):
+    self.cfg, self.rep = cfg, rep
+    self.resp = resp or response(cfg)
+    self.inst = make2(cfg, rep)
+
+  # 기간 0 시장 (onboarding 대기열은 비어 있다)
+  def reset(self):
+    self.pipe = {}
+    return super().reset()
+
+  # 현재 참여자와 onboarding 후보로 관측을 만든다 (신규 참여자의 직전 재참여확률은 경험 없음·잉여 0의 값)
+  def _observe(self):
+    q, p = _mat(self.ords.values(), self.cfg.n_items)
+    cap, c = _mat(self.offs.values(), self.cfg.n_items)
+    sid = [self.sups[j][0] for j in self.offs]
+    p0 = float(self.resp.prob("buy", 0.0, 1.0, 0.0))
+    rb = np.array([self.lb.get(i, p0) for i in self.ords])
+    rs = np.array([self.ls.get(i, p0) for i in sid])
+    pend = np.array([self.pipe[j][1].qty for j in sorted(self.pipe)], int).reshape(-1, self.cfg.n_items)
+    wait = np.array([self.pipe[j][0] - self.t for j in sorted(self.pipe)], int)
+    self.o = Obs(self.t, q, p, cap, c, list(self.ords), sid, rb, rs, pend, wait)
+
+  # 자리 j가 기간 t에 비었다: 후보를 만들어 t + onboard에 활동하도록 대기열에 넣는다
+  def _leave(self, j, t):
+    self.pipe[j] = (t + self.cfg.onboard, candidate(self.cfg, self.inst, self.rep, t, j))
+
+  # 참여자를 뺀다 (공급자는 이번 기간에 떠난 것으로 보고 자리에 후보를 예약한다)
+  def drop(self, kind, k):
+    if kind == "sup":
+      self._leave(list(self.offs)[k], self.t)
+    super().drop(kind, k)
+
+  # 정산 → 경험 의존 재참여 판정 → 떠난 자리에 후보 예약 → 대기 끝난 후보 활동 → 다음 기간 시장
+  def step(self, dec):
+    cfg, rep, t, o = self.cfg, self.rep, self.t, self.o
+    r = settle(cfg, o, dec)
+    x = dec[0]
+    alloc = (x * r["ok"][:, None, None]).sum((0, 2)) > 0
+    wb, ws = worth(o)
+    r["pb"], r["ps"] = self.resp.prob("buy", r["sb"], wb, r["ok"]), self.resp.prob("sup", r["ss"], ws, alloc)
+    self.lb, self.ls = dict(zip(o.bid, r["pb"])), dict(zip(o.sid, r["ps"]))
+    self.t = t + 1
+    self.buys = {i: self.buys[i] for i, p in zip(o.bid, r["pb"]) if ret_u(cfg, rep, "buy", i, t) < p}
+    stay = {j: s for (j, s), p in zip(self.sups.items(), r["ps"]) if ret_u(cfg, rep, "sup", s[0], t) < p}
+    for j in self.sups:
+      if j not in stay:
+        self._leave(j, t)
+    new = {j: self.pipe.pop(j)[1] for j in sorted(self.pipe) if self.pipe[j][0] <= self.t}
+    self.sups = dict(sorted({**stay, **{j: (self.t * cfg.n_sup + j, s) for j, s in new.items()}}.items()))
+    self.offs = {j: new[j] if j in new else perturb(cfg, rep, "sup", i, self.t, s) for j, (i, s) in self.sups.items()}
+    self.ords = {i: perturb(cfg, rep, "buy", i, self.t, b) for i, b in self.buys.items()}
+    self._arrive()
+    r.update(n_buy=len(o.bid), stay_buy=len(set(o.bid) & set(self.o.bid)),
+             n_sup=len(o.sid), stay_sup=len(set(o.sid) & set(self.o.sid)),
+             x=x, alloc=alloc, bid=list(o.bid), sid=list(o.sid),
+             kept_b=np.isin(o.bid, self.o.bid), kept_s=np.isin(o.sid, self.o.sid), joined=sorted(new))
     return r

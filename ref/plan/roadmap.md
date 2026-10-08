@@ -1324,6 +1324,17 @@ Oracle은 c를 잰 후속 정책(Rule)보다는 유의하게 낫다. one-step po
 반복 수 규칙: h = 373 (Myopic-sup의 2%), sd_max = 1,469 → 30 (상한). 30반복에서도 CI 반폭 약 550으로 목표 h보다 크다.
 본 실험은 시작하지 않았다.
 
+### 조달 시장 v2 환경 추가 (2026-10-08, 정책 비교 없음)
+
+설계·진단·결정 목록은 `ref/plan/market_v2.md`. legacy(Cfg 기본값, SCALE15)는 그대로이며 `market = "v2"`인 preset `PROC15`에서만 새 환경이 돈다.
+- 공급자가 떠나면 새로 생성한 후보(품목·용량·가격 새것)가 onboard 기간 뒤 자리를 채운다.
+- 품목별 대체 공급자 수가 het로 달라진다 (총 연결 수는 n_items × n_alt 그대로).
+- 재참여 = σ(β0 + β2 · 경험 + β1 · 잉여율), 경험 = 주문 성립 / 거래 배정. MILP는 PWL − gap × (1 − 경험)으로 정확히 표현.
+- 품목 명목 용량 = cover × 명목 수요 (occ 미사용).
+legacy 재현: diag s7(3정책 기간별), exp7 단위, exp5 MC 미래가 저장값과 같다 (`tests/test_legacy.py`). 전체 테스트 198개 통과.
+sanity check 원자료 `result/runs/diag_s8_market.json`. 잠정 파라미터에서 활동 공급자는 24자리 중 약 10 (Myopic) ~ 14 (Rule), 활동 용량은 명목의 0.44 ~ 0.62였다.
+결과를 보고 파라미터를 바꾸지 않았다.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.

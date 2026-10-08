@@ -123,6 +123,19 @@ class Cfg:
   # 튜닝·보정용 반복 (평가 seed와 분리)
   tune_seed: int = 1
   n_tune: int = 10
+  # 조달 시장 v2 (market = "v2"일 때만 쓴다. 기본값 "legacy"는 기존 환경 그대로이며 아래 값을 읽지 않는다)
+  # het: 품목 qualification 가중치의 변동계수 (0 = 모든 품목 대체 공급자 n_alt개, 클수록 bottleneck 품목이 생김)
+  # onboard: 떠난 공급자 자리를 새 후보가 채우기까지의 기간 L (기간 t에 떠나면 t + L부터 활동, 빈 기간 L − 1)
+  # v2의 품목 명목 용량은 cover × 명목 수요이며 occ(정책 실측값)를 쓰지 않는다
+  # 재참여: p = σ(β0 + β2 · 경험 + β1 · 잉여율). 경험 = 주문자 주문 성립, 공급자 거래 배정 여부 (주문자·공급자 같은 식)
+  # 세 점으로 정한다: 경험 없음·잉여 0이면 r2_p0, 경험 있음·잉여 0이면 r2_p1, 경험 있음·잉여율 r2_rate면 r2_p2
+  market: str = "legacy"
+  het: float = 0.0
+  onboard: int = 4
+  r2_p0: float = 0.3
+  r2_p1: float = 0.6
+  r2_p2: float = 0.85
+  r2_rate: float = 0.1
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
@@ -148,4 +161,19 @@ SCALE15 = dict(
   r_ref_sup=0.11525964887763726,
   b_buy=16.827152171786267,
   b_sup=15.049508412346505,
+)
+
+# 조달 시장 v2 preset (2026-10-08): SCALE15와 같은 규모·가격·수요 생성에 공급자 교체·품목별 대체 공급자 수 이질성·경험 의존 재참여를 더한다.
+# 정책 실측값(occ, r_ref, b_*)을 쓰지 않는다. het·onboard·cover·r2_*는 결과를 보기 전에 정한 잠정값이며 실험 전에 확정한다.
+PROC15 = dict(
+  n_items=15,
+  n_sup=24,
+  n_alt=4,
+  items_per_order=2,
+  conc=0.5,
+  dir_alpha=5.0,
+  market="v2",
+  het=0.5,
+  onboard=4,
+  cover=1.3,
 )

@@ -15,6 +15,8 @@ ENV = gp.Env(params={"OutputFlag": 0})
 # split = (주문자 몫, 공급자 몫)이면 잉여를 마진의 고정 비율로 묶고(규칙 기반), None이면 [0, 자기 거래 마진]에서 고른다
 # 한쪽 몫만 None이면 (예: (0.3, None)) 그쪽만 자유로 두고 다른 쪽은 고정 비율로 묶는다
 # c = (주문자 유지 가치, 공급자 유지 가치)이면 반응 함수 resp의 구간선형 재참여확률 항을 더한다 (None이면 유지 가치 0)
+# resp에 gap(경험 유무의 재참여확률 차이, v2)이 있으면 재참여확률 = PWL(잉여) − gap × (1 − 경험)으로 정확히 표현한다
+# 경험: 주문자는 성립 y[b], 공급자는 배정 여부 z[j] (z ≤ 배정 수량 합, z ≥ 배정 수량 합 / 공급가능량 합)
 def build(cfg, o, split=None, resp=None, c=None):
   m = gp.Model(env=ENV)
   m.Params.OutputFlag = 0
@@ -45,6 +47,19 @@ def build(cfg, o, split=None, resp=None, c=None):
     for sk, pk, wk in zip(s.tolist(), pv.tolist(), w):
       m.addGenConstrPWL(sk, pk, wk * r, p)
     obj = obj + ck @ pv
+    gap = resp.gap(kind) if hasattr(resp, "gap") else 0
+    if gap and len(w):
+      e = y if kind == "buy" else exp_sup(m, x, o)
+      obj = obj - gap * ck.sum() + gap * (ck @ e)
 
   m.setObjective(obj, GRB.MAXIMIZE)
   return m, x, u, v
+
+
+# 공급자 배정 경험 z[j] ∈ {0, 1}: 배정 수량 합이 양수일 때만, 그리고 그때는 반드시 1
+def exp_sup(m, x, o):
+  z = m.addMVar(len(o.cap), vtype=GRB.BINARY)
+  tot = x.sum(2).sum(0)
+  m.addConstr(z <= tot)
+  m.addConstr(o.cap.sum(1) * z >= tot)
+  return z
