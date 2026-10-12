@@ -1350,6 +1350,13 @@ interaction 진단 (Rule-continuation, M = 20, 32상태 2,576쌍): base RMS(I) /
 점검 `result/runs/diag_s10_history.json`: 이력이 경험을 따라 움직이고, 같은 snapshot에서 이력만 다르면 재참여확률이 0.07~0.12 다르며 Rule-continuation 가치 차이가 여섯 사례 모두 양수.
 legacy·PROC15B 재현 테스트 통과.
 
+### 공급자 c_i의 network context 의존성 진단 s11 (2026-10-12, 신경망·정책 비교 없음)
+
+상세 `ref/plan/context_diag.md`. PROC15H, Myopic·Rule 상태 48개, 공급자 c_i 929개 (Rule-continuation, M = 40, 신뢰도 0.90).
+own feature가 비슷한 자연 짝에서 대체 공급자가 적은 쪽 c가 +68 [+54, +82], tightness가 큰 쪽 +42. 섭동: 대체 공급자 제거 +33 [+10, +59], 수요 1.5배 +27, 0.5배 −34.
+회복(대기) 축은 약함. 선형 모형 R² own 0.395 → own + context 0.461 (MAE 개선 유의), 상한 0.90.
+판정: context는 체계적으로 중요하지만 선형 요약의 추가 설명력은 작다. Case C/D 구분은 Context MLP로 먼저 시험한다. GNN 근거는 아직 부족.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.
