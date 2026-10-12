@@ -17,3 +17,4 @@ gurobi.lic
 # 기타
 .vscode/
 *.log
+*.err
