@@ -1357,6 +1357,12 @@ own feature가 비슷한 자연 짝에서 대체 공급자가 적은 쪽 c가 +6
 회복(대기) 축은 약함. 선형 모형 R² own 0.395 → own + context 0.461 (MAE 개선 유의), 상한 0.90.
 판정: context는 체계적으로 중요하지만 선형 요약의 추가 설명력은 작다. Case C/D 구분은 Context MLP로 먼저 시험한다. GNN 근거는 아직 부족.
 
+### Own MLP vs Context MLP 진단 s12 (2026-10-13, GNN 없음)
+
+상세 `ref/plan/mlp_context.md`. diag s11 c_i 929개, 반복 단위 중첩 분할, Own·Context MLP 같은 예산 (9설정 × 3 seed).
+R²: Own ridge 0.395, Context ridge 0.461, Own MLP 0.417, Context MLP 0.510 (상한 0.90). Context MLP − Own MLP R² +0.093 [+0.046, +0.167].
+경쟁·대체 그룹이 기여의 대부분. 잔차는 사후 구조 지표와 관계없음 (교차검증 R² 0.004). 판정 Case C (Case D 직접 증거 약함).
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.
