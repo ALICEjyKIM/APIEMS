@@ -139,6 +139,13 @@ class Cfg:
   # cover_eff: True면 v2 품목 명목 용량 = cover × 명목 수요 / 기준 자리 점유율 (utils/market2.occ_ref, 정책과 무관한 해석값).
   # False(PROC15)면 cover × 명목 수요
   cover_eff: bool = False
+  # 거래 이력 (hist = True인 v2에서만 쓴다): 주문자 성립 이력 hB, 공급자 배정 이력 hS, 품목 공급 부족 이력 hI를 지수 평활로 누적한다
+  # h ← h_rho · h + (1 − h_rho) · 이번 기간 값. 재참여 logit에 h_w · β2 · (h − h0)를 더한다 (β2 = 이번 기간 경험의 계수)
+  # h0: 신규 참여자의 초기 이력이자 중립점 (h = h0이면 이력 없는 v2와 같은 재참여확률). 품목 이력의 초기값은 0
+  hist: bool = False
+  h_rho: float = 0.8
+  h_w: float = 1.0
+  h0: float = 0.5
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
@@ -187,3 +194,7 @@ PROC15 = dict(
 # onboard는 사전 기준안 4가 시장 운영 기준(C1, C3)을 못 맞춰 2로 고쳤다: 배정받고 잉여 0인 공급자의 평균 재임(3.3기간)이
 # 빈 기간(3기간)과 비슷해 공급자가 채워지는 속도로 빠져나갔다 (runs/diag_s9_market_v0.json). 근거와 기준은 ref/plan/interaction_diag.md
 PROC15B = dict(PROC15, r2_p0=0.5, r2_p1=0.7, cover_eff=True, onboard=2)
+
+# 조달 시장 v2 + 거래 이력 (2026-10-12): PROC15B를 그대로 두고 주문자·공급자·품목 이력과 이력 의존 재참여만 더한다.
+# h_rho 0.8 (평균 시차 4기간, 반감기 3.1기간), h_w 1 (누적 경험 0 → 1의 효과 = 이번 기간 경험 0 → 1의 효과), h0 0.5. 결과를 보기 전에 정했다
+PROC15H = dict(PROC15B, hist=True)

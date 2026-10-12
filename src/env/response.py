@@ -49,6 +49,37 @@ class Retention:
     return float(self.prob(kind, 0.0, 1.0, 1.0) - self.prob(kind, 0.0, 1.0, 0.0))
 
 
-# 시장 버전에 맞는 기본 반응 함수 (legacy = Logistic, v2 = Retention)
+class HistRetention(Retention):
+  """이력 의존 재참여 p = σ(β0 + β2 · e + β1 · s / w + β3 · (h − h0)) (조달 시장 v2 + 거래 이력).
+  h는 참여자의 누적 경험 (주문자 성립 이력 hB, 공급자 배정 이력 hS), β3 = h_w · β2. h = h0이면 Retention과 같다.
+  h를 생략하면 h0으로 본다. MILP는 hist(o, kind)로 참여자별 h를 읽어 참여자별 꺾인 점과 gap을 쓴다.
+  """
+
+  def __init__(self, cfg):
+    super().__init__(cfg)
+    self.w, self.h0 = cfg.h_w * self.e, cfg.h0
+
+  # 종류 kind 참여자의 재참여 확률
+  def prob(self, kind, s, w, e=1.0, h=None):
+    d = 0.0 if h is None else self.w * (np.asarray(h, float) - self.h0)
+    return 1 / (1 + np.exp(-(self.a + d + self.e * np.asarray(e, float) + self.b * np.asarray(s) / w)))
+
+  # 경험 있는 참여자(이력 h)가 재참여 확률 p가 되는 잉여율
+  def rate(self, kind, p, h=None):
+    d = 0.0 if h is None else self.w * (h - self.h0)
+    return (np.log(p / (1 - p)) - self.a - d - self.e) / self.b
+
+  # 잉여 0에서 경험 유무에 따른 재참여 확률 차이 (이력 h)
+  def gap(self, kind, h=None):
+    return float(self.prob(kind, 0.0, 1.0, 1.0, h) - self.prob(kind, 0.0, 1.0, 0.0, h))
+
+  # 관측의 참여자별 이력
+  def hist(self, o, kind):
+    return o.hb if kind == "buy" else o.hs
+
+
+# 시장 버전에 맞는 기본 반응 함수 (legacy = Logistic, v2 = Retention, v2 + 이력 = HistRetention)
 def response(cfg):
-  return Retention(cfg) if cfg.market == "v2" else Logistic(cfg)
+  if cfg.market != "v2":
+    return Logistic(cfg)
+  return HistRetention(cfg) if cfg.hist else Retention(cfg)

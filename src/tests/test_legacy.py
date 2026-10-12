@@ -57,3 +57,17 @@ def test_v2_dispatch():
   from utils.params import PROC15
   cfg = replace(Cfg(), **PROC15)
   assert type(Env(cfg, 0)) is Env2
+
+
+# PROC15B 재현 (이력 환경 추가 후): 진단 s9a 기준 칸 Myopic·Rule 5반복 평균 지표와 s9b 상태(base 반복 0 기간 8)의 미래 2개가 저장값과 같다
+def test_proc15b_reproduced():
+  from result.diag_s9_market import episode as ep9, BASE, POLS as P9, REPS
+  from result.diag_s9_interaction import state, value
+  src = json.loads((diag.RUNS / "diag_s9_market.json").read_text(encoding="utf-8"))["conds"]["base"]["metrics"]
+  assert type(Env(BASE, 0)) is Env2
+  for pn, mk in P9.items():
+    eps = [ep9(BASE, mk, rep) for rep in REPS]
+    for k in ("act_sup", "act_buy", "fill", "zero_all", "cap_ratio", "dep_sup"):
+      assert np.mean([e[k] for e in eps]) == pytest.approx(src[pn][k], abs=1e-12), (pn, k)
+  u = json.loads((diag.RUNS / "diag_s9_units" / "base_r0_t8_c0.json").read_text(encoding="utf-8"))
+  assert np.allclose(value(state(BASE, 0, 8), [], 2), u["values"][""][:2])

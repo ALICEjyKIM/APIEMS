@@ -42,6 +42,10 @@ def build(cfg, o, split=None, resp=None, c=None):
   obj = prof
 
   for kind, s, w, ck in zip(("buy", "sup"), (u, v), worth(o), c or ()):
+    hv = resp.hist(o, kind) if hasattr(resp, "hist") else None
+    if hv is not None:
+      obj = obj + hist_terms(cfg, m, resp, kind, s, w, ck, hv, y if kind == "buy" else None, x, o)
+      continue
     r, p = points(cfg, resp, kind)
     pv = m.addMVar(len(w))
     for sk, pk, wk in zip(s.tolist(), pv.tolist(), w):
@@ -54,6 +58,19 @@ def build(cfg, o, split=None, resp=None, c=None):
 
   m.setObjective(obj, GRB.MAXIMIZE)
   return m, x, u, v
+
+
+# 이력 의존 재참여 항 (HistRetention): 참여자별 이력 h로 꺾인 점과 gap을 따로 만든다. Σ c × (PWL_h(잉여) − gap_h × (1 − 경험))
+def hist_terms(cfg, m, resp, kind, s, w, ck, hv, y, x, o):
+  if not len(w):
+    return 0
+  pv = m.addMVar(len(w))
+  for sk, pk, wk, hk in zip(s.tolist(), pv.tolist(), w, hv):
+    r, p = points(cfg, resp, kind, hk)
+    m.addGenConstrPWL(sk, pk, wk * r, p)
+  g = np.array([resp.gap(kind, hk) for hk in hv]) * ck
+  e = y if kind == "buy" else exp_sup(m, x, o)
+  return ck @ pv - g.sum() + g @ e
 
 
 # 공급자 배정 경험 z[j] ∈ {0, 1}: 배정 수량 합이 양수일 때만, 그리고 그때는 반드시 1

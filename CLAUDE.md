@@ -102,6 +102,7 @@ MLP + 편중도 요약(시장 요약 지표에 공급자별 품목 수의 최댓
 - `utils/params.PROC15` preset (`market = "v2"`)에서만 동작한다. 위 "모델 가정"은 legacy(Cfg 기본값, SCALE15) 환경의 가정이며 실험 1~7은 legacy로 재현한다.
 - v2 차이: 떠난 공급자 자리는 새로 생성한 후보가 onboard 기간 뒤 채운다 / 품목별 대체 공급자 수가 het로 다르다 / 재참여가 주문 성립·거래 배정 경험에 의존한다 / 품목 용량은 cover × 명목 수요 (정책 실측값 미사용).
 - 설계와 실험 전 결정 목록: `ref/plan/market_v2.md`.
+- 기준 환경 `PROC15B` (`ref/plan/interaction_diag.md`), 거래 이력을 더한 `PROC15H` (`ref/plan/history.md`).
 
 ## 그래프 설계 (vfa/gnn.py)
 

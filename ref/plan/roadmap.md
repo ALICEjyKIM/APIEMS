@@ -1343,6 +1343,13 @@ interaction 진단 (Rule-continuation, M = 20, 32상태 2,576쌍): base RMS(I) /
 공통 품목 공급자가 2명이면 −77 (비 0.45). bundle complementarity는 검출되지 않음. 약한 관계 쌍은 잡음 수준. 순위 변화는 잡음과 구분되지 않음.
 권고: additive c_i 유지, 얇은 품목 공동 공급자의 substitutability만 상태 의존 c_i로 담을 수 있는지 검토.
 
+### 거래 이력 환경 PROC15H (2026-10-12, 정책 비교 없음)
+
+상세 `ref/plan/history.md`. PROC15B는 그대로이고 `PROC15H = dict(PROC15B, hist=True)`에서 주문자 성립 이력 hB, 공급자 배정 이력 hS, 품목 공급 부족 이력 hI를
+ρ = 0.8로 누적하고 재참여 logit에 β2 · (h − 0.5)를 더한다. 신규 참여자는 0.5, 떠난 참여자의 이력은 지운다. 난수를 더 쓰지 않는다.
+점검 `result/runs/diag_s10_history.json`: 이력이 경험을 따라 움직이고, 같은 snapshot에서 이력만 다르면 재참여확률이 0.07~0.12 다르며 Rule-continuation 가치 차이가 여섯 사례 모두 양수.
+legacy·PROC15B 재현 테스트 통과.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.

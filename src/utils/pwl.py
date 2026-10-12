@@ -5,8 +5,12 @@
 import numpy as np
 
 
-# 반응 함수 resp의 종류 kind에 대한 잉여율 꺾인 점과 재참여확률
-def points(cfg, resp, kind):
-  r = np.r_[np.linspace(0, resp.rate(kind, cfg.pwl_hi), cfg.pwl_n), cfg.pwl_rmax]
-  assert r[-2] < r[-1]
-  return r, resp.prob(kind, r, 1.0)
+# 반응 함수 resp의 종류 kind에 대한 잉여율 꺾인 점과 재참여확률 (h를 주면 그 이력의 참여자, HistRetention)
+def points(cfg, resp, kind, h=None):
+  if h is None:
+    r = np.r_[np.linspace(0, resp.rate(kind, cfg.pwl_hi), cfg.pwl_n), cfg.pwl_rmax]
+    assert r[-2] < r[-1]
+    return r, resp.prob(kind, r, 1.0)
+  r = np.r_[np.linspace(0, max(resp.rate(kind, cfg.pwl_hi, h), 0.0), cfg.pwl_n), cfg.pwl_rmax]
+  r = np.unique(r)
+  return r, resp.prob(kind, r, 1.0, 1.0, h)
