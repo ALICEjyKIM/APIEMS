@@ -84,16 +84,26 @@ def metrics(pred, y, st, idx=None):
   return out
 
 
+# 반복 블록 부트스트랩 한 번: 뽑힌 반복의 행을 이어 붙이고 상태 키에 뽑힌 순번을 붙인다 (같은 반복이 두 번 뽑혀도 상태 안 지표가 섞이지 않게)
+def draw(rng, idx, g, st):
+  reps = np.unique(g[idx])
+  ix, sk = [], []
+  for b, r in enumerate(rng.choice(reps, len(reps))):
+    m = idx[g[idx] == r]
+    ix.append(m)
+    sk += [(st[i], b) for i in m]
+  return np.concatenate(ix), sk
+
+
 # 두 모형 차이의 반복 블록 부트스트랩 (R², MAE, 상태 내 Spearman)
 def diff(pa, pb, y, g, st, idx=None):
   idx = np.arange(len(y)) if idx is None else idx
-  reps = np.unique(g[idx])
   rng = np.random.default_rng(0)
   full = {k: metrics(pa, y, st, idx)[k] - metrics(pb, y, st, idx)[k] for k in ("r2", "mae", "spearman")}
   draws = defaultdict(list)
   for _ in range(B):
-    ix = np.concatenate([idx[g[idx] == r] for r in rng.choice(reps, len(reps))])
-    ma, mb = metrics(pa, y, st, ix), metrics(pb, y, st, ix)
+    ix, sk = draw(rng, idx, g, st)
+    ma, mb = metrics(pa[ix], y[ix], sk), metrics(pb[ix], y[ix], sk)
     for k in full:
       draws[k].append(ma[k] - mb[k])
   return {k: dict(diff=v, lo=float(np.nanpercentile(draws[k], 2.5)), hi=float(np.nanpercentile(draws[k], 97.5))) for k, v in full.items()}

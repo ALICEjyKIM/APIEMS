@@ -1363,6 +1363,13 @@ own feature가 비슷한 자연 짝에서 대체 공급자가 적은 쪽 c가 +6
 R²: Own ridge 0.395, Context ridge 0.461, Own MLP 0.417, Context MLP 0.510 (상한 0.90). Context MLP − Own MLP R² +0.093 [+0.046, +0.167].
 경쟁·대체 그룹이 기여의 대부분. 잔차는 사후 구조 지표와 관계없음 (교차검증 R² 0.004). 판정 Case C (Case D 직접 증거 약함).
 
+### SUM-GNN vs Context MLP 진단 s13 (2026-10-13, 정책 비교 없음)
+
+상세 `ref/plan/sum_gnn.md`. Buyer–Item–Supplier SUM-GNN이 공급자마다 c_i를 직접 낸다. 같은 18설정 × 3 seed 예산, s12와 같은 분할.
+48상태: R² GNN 0.638 vs Context MLP 0.506 (차이 +0.131 [−0.016, +0.220]), 상태 내 Spearman +0.085 [+0.053, +0.113], thin Spearman +0.214.
+96상태 보조: R² 0.735 vs 0.545 (+0.190 [+0.168, +0.213]), 모든 지표 유의. 학습 곡선 GNN 계속 상승. 수요 섭동의 크기를 GNN만 따라감.
+s12의 부트스트랩 오류(같은 반복이 두 번 뽑힐 때 상태 내 지표가 섞임)를 고쳐 CI를 다시 냈다. 판정 변화 없음.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.
