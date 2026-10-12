@@ -1335,6 +1335,14 @@ legacy 재현: diag s7(3정책 기간별), exp7 단위, exp5 MC 미래가 저장
 sanity check 원자료 `result/runs/diag_s8_market.json`. 잠정 파라미터에서 활동 공급자는 24자리 중 약 10 (Myopic) ~ 14 (Rule), 활동 용량은 명목의 0.44 ~ 0.62였다.
 결과를 보고 파라미터를 바꾸지 않았다.
 
+### PROC15B 기준 환경과 interaction 진단 (2026-10-12, 정책 비교 없음)
+
+상세 `ref/plan/interaction_diag.md`. 기준 환경 `PROC15B` = PROC15 + 재참여 0.5 / 0.7 / 0.85 + 실효 cover + onboard 2.
+사전 기준(시장 운영 C1~C3)을 실행 전에 적었고, 사전 기준안 onboard 4가 C1·C3를 못 맞춰 2로 고쳤다 (`diag_s9_market_v0.json` → `diag_s9_market.json`).
+interaction 진단 (Rule-continuation, M = 20, 32상태 2,576쌍): base RMS(I) / RMS(c) = 0.16. same-item 쌍은 음수(−14.1 [−26.0, −3.8])이고
+공통 품목 공급자가 2명이면 −77 (비 0.45). bundle complementarity는 검출되지 않음. 약한 관계 쌍은 잡음 수준. 순위 변화는 잡음과 구분되지 않음.
+권고: additive c_i 유지, 얇은 품목 공동 공급자의 substitutability만 상태 의존 c_i로 담을 수 있는지 검토.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.

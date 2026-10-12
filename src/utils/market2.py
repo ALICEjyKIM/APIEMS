@@ -28,6 +28,17 @@ def demand(cfg):
   return cfg.lam_buy / (1 - cfg.ret_ss) * cfg.items_per_order / cfg.n_items * (lo + hi) / 2
 
 
+# 기준 자리 점유율: 경험 있음·잉여 0의 재참여확률 r2_p1로 머무는 공급자의 평균 재임 1 / (1 − r2_p1)과 빈 기간 onboard − 1의 비 (정책과 무관한 해석값)
+def occ_ref(cfg):
+  ten = 1 / (1 - cfg.r2_p1)
+  return ten / (ten + cfg.onboard - 1)
+
+
+# 품목 명목 용량: cover × 명목 수요. cover_eff면 cover를 실효 coverage로 보고 기준 자리 점유율로 나눈다
+def capacity(cfg):
+  return cfg.cover * demand(cfg) / (occ_ref(cfg) if cfg.cover_eff else 1.0)
+
+
 # 품목 qualification 가중치: het = 0이면 균등, 아니면 Gamma(1/het², 1) 정규화 (가중치의 변동계수 ≈ het)
 def weights(cfg, g):
   if cfg.het == 0:
@@ -84,7 +95,7 @@ def make2(cfg, rep):
   w = weights(cfg, g)
   deg = _degrees(cfg)
   n_tgt = targets(cfg, w, deg)
-  mk = Market(base, w, n_tgt, np.full(cfg.n_items, cfg.cover * demand(cfg)), deg)
+  mk = Market(base, w, n_tgt, np.full(cfg.n_items, capacity(cfg)), deg)
   items = slots(cfg, g, deg, n_tgt)
   mk.sups = [profile(cfg, mk, g, items[j]) for j in range(cfg.n_sup)]
   return mk

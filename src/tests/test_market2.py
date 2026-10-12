@@ -160,3 +160,14 @@ def test_v2_milp_rollout(cv):
     if r["ss"].sum() == 0:
       ws = worth(o)[1]
       assert pol.obj == pytest.approx(r["profit"] + cv * f.prob("sup", 0.0, ws, r["alloc"]).sum(), abs=1e-4)
+
+
+# PROC15B: 실효 cover면 품목 명목 용량 = cover × 명목 수요 / 기준 자리 점유율 (재임 1 / (1 − r2_p1), 빈 기간 onboard − 1)
+def test_proc15b_capacity():
+  from utils.params import PROC15B
+  from utils.market2 import occ_ref
+  cfg = replace(Cfg(), **PROC15B)
+  ten = 1 / (1 - cfg.r2_p1)
+  assert occ_ref(cfg) == pytest.approx(ten / (ten + cfg.onboard - 1))
+  assert np.allclose(make2(cfg, 0).K, cfg.cover * demand(cfg) / occ_ref(cfg))
+  assert np.allclose(make2(CFG, 0).K, CFG.cover * demand(CFG))

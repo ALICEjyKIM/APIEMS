@@ -136,6 +136,9 @@ class Cfg:
   r2_p1: float = 0.6
   r2_p2: float = 0.85
   r2_rate: float = 0.1
+  # cover_eff: True면 v2 품목 명목 용량 = cover × 명목 수요 / 기준 자리 점유율 (utils/market2.occ_ref, 정책과 무관한 해석값).
+  # False(PROC15)면 cover × 명목 수요
+  cover_eff: bool = False
   # 허브 통합 배송: 성립 주문당 허브→주문자 고정비만 (개당 비용·분할 공급 추가 비용 없음)
   f_ship: float = 25.0
   # MILP (gurobipy)
@@ -177,3 +180,10 @@ PROC15 = dict(
   onboard=4,
   cover=1.3,
 )
+
+# 조달 시장 v2 기준 환경 (2026-10-12, interaction 진단 전에 고정). PROC15에서 세 가지를 바꾼다:
+# 재참여 세 점 0.5 / 0.7 / 0.85 (경험 없음·잉여 0은 legacy와 같은 0.5, 경험과 잉여율 0.1이 logit에서 같은 크기로 더해진다),
+# cover를 실효 coverage로 해석 (기준 자리 점유율로 나눔), onboard 2.
+# onboard는 사전 기준안 4가 시장 운영 기준(C1, C3)을 못 맞춰 2로 고쳤다: 배정받고 잉여 0인 공급자의 평균 재임(3.3기간)이
+# 빈 기간(3기간)과 비슷해 공급자가 채워지는 속도로 빠져나갔다 (runs/diag_s9_market_v0.json). 근거와 기준은 ref/plan/interaction_diag.md
+PROC15B = dict(PROC15, r2_p0=0.5, r2_p1=0.7, cover_eff=True, onboard=2)
