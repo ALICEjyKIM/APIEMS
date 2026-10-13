@@ -1370,6 +1370,12 @@ R²: Own ridge 0.395, Context ridge 0.461, Own MLP 0.417, Context MLP 0.510 (상
 96상태 보조: R² 0.735 vs 0.545 (+0.190 [+0.168, +0.213]), 모든 지표 유의. 학습 곡선 GNN 계속 상승. 수요 섭동의 크기를 GNN만 따라감.
 s12의 부트스트랩 오류(같은 반복이 두 번 뽑힐 때 상태 내 지표가 섞임)를 고쳐 CI를 다시 냈다. 판정 변화 없음.
 
+### 모델 크기 통제와 결정 유용성 진단 s14 (2026-10-14)
+
+상세 `ref/plan/decision_test.md`. Part I (96상태): 파라미터 수를 맞춘 Large Context MLP R² 0.537, Context MLP 0.545, SUM-GNN 0.735 (차이 +0.198 [+0.170, +0.228]).
+GNN 우위는 파라미터 수 때문이 아니다. Part II Step A (평가 반복 16~23, 24상태): Exact-MC Rule-c − Myopic-sup +2.9 [−16.9, +22.0] (후속 Rule),
++10.2 [−10.7, +30.2] (후속 Myopic-sup). 정책 차이는 총가치의 0.2% 이하. Case C (target/policy mismatch). Step B는 신호가 없어 실행하지 않음.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.
