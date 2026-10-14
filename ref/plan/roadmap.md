@@ -1376,6 +1376,12 @@ s12의 부트스트랩 오류(같은 반복이 두 번 뽑힐 때 상태 내 지
 GNN 우위는 파라미터 수 때문이 아니다. Part II Step A (평가 반복 16~23, 24상태): Exact-MC Rule-c − Myopic-sup +2.9 [−16.9, +22.0] (후속 Rule),
 +10.2 [−10.7, +30.2] (후속 Myopic-sup). 정책 차이는 총가치의 0.2% 이하. Case C (target/policy mismatch). Step B는 신호가 없어 실행하지 않음.
 
+### Policy-consistent c 한 기간 결정 진단 s15 (2026-10-14)
+
+상세 `ref/plan/policy_consistent_c.md`. s14와 같은 24상태에서 c^M = Myopic-sup continuation c (평균 132, 신뢰도 0.91).
+Exact-MC Myopic-c − Myopic-sup (후속 Myopic-sup): 이번 기간 −99.0, 이후 +120.8, 총가치 +21.8 [−2.9, +44.5] (0.17%), 더 나은 상태 62%.
+Rule-c(+10.2)보다 크지만 CI가 0 포함. policy mismatch는 일부 설명. Case A와 B 사이.
+
 ## 슬라이스 8: order fill 반응 환경
 
 목표: correlated churn이 나타나는 `ret_fail` 구간이 있는지 확인한다.
