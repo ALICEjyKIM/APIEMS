@@ -6,6 +6,7 @@ __pycache__/
 src/result/runs/*.json
 !src/result/runs/diag_*.json
 !src/result/runs/exp*.json
+src/result/runs/*_cache*.pkl
 
 # 루프 상태 (로컬 전용)
 auto_improvement/context/
