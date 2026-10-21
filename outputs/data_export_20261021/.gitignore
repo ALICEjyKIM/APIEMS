@@ -1,0 +1,5 @@
+node_modules/
+export_data.json
+*.inspect.ndjson
+preview_*.png
+~$*.xlsx
