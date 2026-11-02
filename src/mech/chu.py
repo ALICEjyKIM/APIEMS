@@ -32,7 +32,7 @@ class Out:
 # 품목별 padding 크기 Q_c = ⌈m × max(최대 공급자 물량, 한 주문 최대 요구량)⌉ (Chu Theorem 5, m ≥ 1)
 def pad(cfg, m, q, K):
   assert m >= 1
-  base = np.maximum(K.max(0), q.max(0))
+  base = np.maximum(K.max(0, initial=0), q.max(0, initial=0))
   return np.array([math.ceil(m * b - cfg.tol) for b in base])
 
 
@@ -55,7 +55,7 @@ class Prob:
 
   def __init__(self, cfg, q, W, K, g, grp):
     nb, nc = q.shape
-    assert W.max() < cfg.a_max
+    assert (W < cfg.a_max).all()
     self.cfg, self.q, self.W, self.K, self.g, self.n = cfg, q, W, K, g, 0
     self.ey = cfg.tol * (1 + np.arange(K.size)).reshape(K.shape) / K.size
     m = gp.Model(env=env(cfg))
