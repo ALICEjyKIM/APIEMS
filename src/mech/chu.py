@@ -14,7 +14,7 @@ from gurobipy import GRB
 class Out:
   """한 기간 청산 결과.
   win: 성립 주문, p: 주문자 가격(미성립 0), y: 배정량, crit: 공급자 임계 가격(거래하지 않으면 nan), R: 공급자 대금.
-  G: 플랫폼 몫, sw: 실제 거래 이득, Ub·Uj: padding 제외 주문·공급자, n: MILP 풀이 횟수.
+  G: 플랫폼 몫, sw: 실제 거래 이득, sw0: Q = 0 청산의 거래 이득(효율 기준), Ub·Uj: padding 제외 주문·공급자, n: MILP 풀이 횟수.
   """
   Q: np.ndarray
   win: np.ndarray
@@ -24,6 +24,7 @@ class Out:
   R: np.ndarray
   G: float
   sw: float
+  sw0: float
   Ub: np.ndarray
   Uj: np.ndarray
   n: int
@@ -122,6 +123,6 @@ def clear(cfg, q, W, K, g, m, grp=None):
     R[j, c] = g[j, c] * y[j, c] + v - P.solve(Z, win, gc)[0]
   G = (p[win] - cfg.f_ship).sum() - R.sum()
   assert G >= -cfg.tol * (nb + K.size)
-  _, x0, y0 = P.solve(Z, on)
+  v0, x0, y0 = P.solve(Z, on)
   Ub, Uj = x0 & ~win, (y0.sum(1) > 0) & (y.sum(1) == 0)
-  return Out(Q, win, p, y, crit, R, G, v, Ub, Uj, P.n)
+  return Out(Q, win, p, y, crit, R, G, v, v0, Ub, Uj, P.n)

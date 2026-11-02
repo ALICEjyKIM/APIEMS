@@ -1,0 +1,129 @@
+"""출발 점검 (N3, 설정은 ref/decisions.md "출발 점검 설정" 이하 세 줄).
+anchor: 고정 padding에서 거래한 참여자 잉여율 중앙값 (재참여 기준점), pad: 같은 입찰에서 m 후보별 빠지는 거래·플랫폼 몫,
+manip: 다품목 공급자 품목 간 조작 반례 탐색과 대조군. 실행: src/에서 python -m result.check_start {anchor|pad|manip} [r_buy r_sup]
+"""
+import json
+import sys
+from dataclasses import replace
+from multiprocessing import Pool
+import numpy as np
+from utils.params import Cfg
+from env.sim import Sim
+from mech.chu import clear
+
+REPS, T0 = range(1000, 1010), 5
+
+
+# 고정 padding 경로: 기간별 입찰 (t, q, W, K, g)와 기록
+def path(args):
+  cfg, rep = args
+  s, out = Sim(cfg, rep), []
+  for _ in range(cfg.T):
+    b = (s.t, s.q.copy(), s.W.copy(), s.K.copy(), s.g.copy())
+    out.append((b, s.step(1.0, 0.0)))
+  return out
+
+
+def paths(cfg):
+  with Pool(len(REPS)) as p:
+    return p.map(path, [(cfg, r) for r in REPS])
+
+
+# 잉여율 중앙값과 분위수 (거래한 참여자, t ≥ T0)
+def anchor(cfg):
+  P = paths(cfg)
+  rec = [r for ps in P for _, r in ps if r["t"] >= T0]
+  xb = np.concatenate([r["xb"][r["eb"]] for r in rec])
+  xs = np.concatenate([r["xs"][r["es"]] for r in rec])
+  q = lambda x: dict(n=len(x), med=float(np.median(x)), q10=float(np.quantile(x, 0.1)), q25=float(np.quantile(x, 0.25)), q75=float(np.quantile(x, 0.75)), q90=float(np.quantile(x, 0.9)))
+  return dict(r_buy=cfg.r2_rate_buy, r_sup=cfg.r2_rate_sup, buy=q(xb), sup=q(xs),
+              ret_buy=float(np.mean([r["zb"].mean() for r in rec])), ret_sup=float(np.mean([r["zs"].mean() for r in rec])),
+              nb=float(np.mean([r["nb"] for r in rec])), ns=float(np.mean([r["ns"] for r in rec])))
+
+
+# 한 기간 입찰을 m 후보마다 청산
+def pad_one(args):
+  cfg, b = args
+  t, q, W, K, g = b
+  rows = []
+  for m in cfg.m_grid:
+    o = clear(cfg, q, W, K, g, m)
+    rows.append(dict(t=t, m=m, nb=len(W), win=int(o.win.sum()), Ub=int(o.Ub.sum()), Uj=int(o.Uj.sum()), ns=len(K),
+                     G=float(o.G), sw=float(o.sw), sw0=float(o.sw0), Q=int(o.Q.sum()), cap=int(K.sum())))
+  return rows
+
+
+def pad(cfg):
+  bs = [b for ps in paths(cfg) for b, r in ps if r["t"] >= T0]
+  with Pool(10) as p:
+    rows = [x for rs in p.map(pad_one, [(cfg, b) for b in bs]) for x in rs]
+  summ = {}
+  for m in cfg.m_grid:
+    R = [r for r in rows if r["m"] == m]
+    a = lambda k: float(np.mean([r[k] for r in R]))
+    summ[str(m)] = dict(win_rate=float(np.mean([r["win"] / r["nb"] for r in R])), Ub=a("Ub"), Uj=a("Uj"), G=a("G"), sw=a("sw"), sw0=a("sw0"),
+                        eff=float(np.sum([r["sw"] for r in R]) / np.sum([r["sw0"] for r in R])), G_share=float(np.sum([r["G"] for r in R]) / np.sum([r["sw0"] for r in R])),
+                        G_neg=int(sum(r["G"] < -1e-6 for r in R)), Q_cap=float(np.mean([r["Q"] / r["cap"] for r in R])))
+  return dict(n=len(bs), summary=summ, rows=rows)
+
+
+# 공급자 j의 효용: Σ_c (R_jc − 실제 원가 × y_jc)
+def u_sup(cfg, q, W, K, g, gt, j):
+  o = clear(cfg, q, W, K, g, 1.0)
+  return float(o.R[j].sum() - (gt[j] * o.y[j]).sum())
+
+
+# 주문자 b의 효용: 성립하면 실제 가치 − 가격
+def u_buy(cfg, q, W, K, g, Wt, b):
+  o = clear(cfg, q, W, K, g, 1.0)
+  return float(Wt[b] - o.p[b]) if o.win[b] else 0.0
+
+
+# 한 기간에서 다품목·단일 품목 공급자와 주문자의 신고를 바꿔 효용 변화를 잰다
+def manip_one(args):
+  cfg, b = args
+  t, q, W, K, g = b
+  o, rows = clear(cfg, q, W, K, g, 1.0), []
+  trade = o.y.sum(1) > 0
+  nit = (K > 0).sum(1)
+  for kind, js in (("multi", np.flatnonzero(trade & (nit >= 2))[:3]), ("single", np.flatnonzero(trade & (nit == 1))[:3])):
+    for j in js:
+      u0 = float(o.R[j].sum() - (g[j] * o.y[j]).sum())
+      for c in np.flatnonzero(K[j] > 0):
+        for f in (0.5, 0.8, 0.9, 1.1, 1.25, 1.5, 2.0):
+          g2 = g.copy()
+          g2[j, c] *= f
+          u = u_sup(cfg, q, W, K, g2, g, j)
+          rows.append(dict(kind=kind, t=t, j=int(j), c=int(c), f=f, u0=u0, u=u, gain=u - u0, w=float((g[j] * K[j]).sum())))
+  for bb in np.flatnonzero(o.win)[:3]:
+    u0 = float(W[bb] - o.p[bb])
+    for f in (0.8, 0.9, 1.1, 1.25):
+      W2 = W.copy()
+      W2[bb] *= f
+      u = u_buy(cfg, q, W2, K, g, W, bb)
+      rows.append(dict(kind="buyer", t=t, j=int(bb), c=-1, f=f, u0=u0, u=u, gain=u - u0, w=float(W[bb])))
+  return rows
+
+
+def manip(cfg):
+  bs = [b for ps in paths(cfg) for b, r in ps if r["t"] in (10, 20)]
+  with Pool(10) as p:
+    rows = [x for rs in p.map(manip_one, [(cfg, b) for b in bs]) for x in rs]
+  summ = {}
+  for k in ("multi", "single", "buyer"):
+    R = [r for r in rows if r["kind"] == k]
+    pos = [r for r in R if r["gain"] > 1e-6]
+    summ[k] = dict(n=len(R), agents=len({(r["t"], r["j"], r["u0"]) for r in R}), n_pos=len(pos), max_gain=max([r["gain"] for r in R], default=0.0),
+                   max_rel=max([r["gain"] / r["w"] for r in R], default=0.0), mean_pos=float(np.mean([r["gain"] for r in pos])) if pos else 0.0)
+  return dict(n=len(bs), summary=summ, rows=rows)
+
+
+if __name__ == "__main__":
+  cmd, cfg = sys.argv[1], Cfg()
+  if len(sys.argv) > 2:
+    cfg = replace(cfg, r2_rate_buy=float(sys.argv[2]), r2_rate_sup=float(sys.argv[3]))
+  out = dict(anchor=anchor, pad=pad, manip=manip)[cmd](cfg)
+  out["cfg"] = repr(cfg)
+  tag = f"_{cfg.r2_rate_buy:.4f}_{cfg.r2_rate_sup:.4f}" if cmd == "anchor" else ""
+  json.dump(out, open(f"result/runs/check_start_{cmd}{tag}.json", "w"), indent=1)
+  print(json.dumps(out.get("summary", {k: v for k, v in out.items() if k != "cfg"}), indent=1))

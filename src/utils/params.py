@@ -44,12 +44,12 @@ class Cfg:
   noise_price: float = 0.05
   f_ship: float = 25.0  # 성립 주문당 허브 배송 고정비
   # 재참여 기본항: 세 점 (경험 없음·잉여 0) → r2_p0, (경험·잉여 0) → r2_p1, (경험·잉여율 기준점) → r2_p2
-  # 기준점 r2_rate_*는 잠정 0.1. 고정 padding에서 거래한 참여자 잉여율의 중앙값으로 주문자·공급자 따로 다시 잰다 (decisions.md)
+  # 기준점 r2_rate_*: 고정 padding에서 거래한 참여자 잉여율의 중앙값, 주문자·공급자 따로 (출발 점검, check_start_anchor_*.json)
   r2_p0: float = 0.5
   r2_p1: float = 0.7
   r2_p2: float = 0.85
-  r2_rate_buy: float = 0.1
-  r2_rate_sup: float = 0.1
+  r2_rate_buy: float = 0.156
+  r2_rate_sup: float = 0.035
   # 거래 이력 h ← h_rho·h + (1 − h_rho)·e, logit에 h_w·β2·(h − h0)
   h_rho: float = 0.8
   h_w: float = 1.0
