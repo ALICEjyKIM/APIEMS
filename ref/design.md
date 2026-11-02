@@ -33,9 +33,9 @@ s.t. Σ_b q_bc x_b + Q_c = Σ_j y_jc   (모든 품목 c)
 ```
 
 1. 품목별 padding 크기: Q_c = ⌈m × max(품목 c 최대 공급자 물량, 품목 c 한 주문 최대 요구량)⌉ (Chu Theorem 5 조건, m ≥ 1).
-2. 낙찰: V(B, J, Q)의 해에서 x_b = 1인 주문자가 성립 집합 Î. 동점은 참여자 번호 순 미세 perturbation으로 깬다(Chu 각주 2).
+2. 낙찰: V(B, J, Q)의 해에서 x_b = 1인 주문자가 성립 집합 Î. 동점은 참여자 번호 순 미세 perturbation으로 깬다(Chu 각주 2). 품목마다 단가 `a_max`의 가상 공급자(용량 Q_c)를 두어 padding 문제가 항상 풀리게 한다(Chu 6.1절 가정). 모든 묶음 가치가 `a_max`보다 작아 실제 배정에는 쓰이지 않는다.
 3. 주문자 가격: p_b = W_b − [V(B, J, Q) − V(B∖{b}, J, Q)], b ∈ Î. 성립 주문마다 MILP 1회.
-4. 공급자 임계 가격: p_jc = 공급자 j가 품목 c의 용량을 다 쓰는(y_jc = K_jc) 가장 높은 원가 신고 (padding 문제, 다른 신고 고정). 이분탐색.
+4. 공급자 임계 가격: p_jc = 공급자 j가 품목 c의 용량을 다 쓰는(y_jc = K_jc) 가장 높은 원가 신고 (padding 문제, 다른 신고 고정). y_jc = K_jc로 고정한 값 A − gK_jc와 y_jc ≤ K_jc − 1인 값 B(g)의 교점을 g = `a_max`부터 내려가며 찾는다 (B는 g의 볼록 구간선형 함수라 몇 번 만에 정확히 끝난다).
 5. 배정: Î만 두고 padding 없이 푼다(주문자는 자기 묶음만 입찰). Î 전원이 성립하는지 assert.
 6. 공급자 대금: R_jc = g_jc y_jc + V(Î, J) − V(Î, J | g_jc = p_jc), R_j = Σ_c R_jc.
 7. 플랫폼 잉여 G_t = Σ_{b∈Î} (p_b − f) − Σ_j R_j ≥ 0 (Chu 정리, assert).
