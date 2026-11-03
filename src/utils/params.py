@@ -63,8 +63,8 @@ class Cfg:
   # 청산(Chu IPB): Q_c = ⌈m × max(품목 c 최대 공급자 물량, 품목 c 한 주문 최대 요구량)⌉, 후보 = m_grid × theta_grid
   m_grid: tuple = (1.0, 1.1, 1.25, 1.5)
   theta_grid: tuple = (0.0, 0.25, 0.5)
-  cbar: float = 0.05  # 쿠폰 상한 (공개 가중치 ω_i 대비)
-  cpn_w: float = 1.0  # 쿠폰을 재참여의 x에 넣는 비율 (민감도 0.5)
+  cbar: float = 0.05  # 재참여 보상 1인 상한 (공개 가중치 ω_i 대비)
+  cpn_w: float = 1.0  # 재참여 보상 κ/ω를 재참여의 x에 넣는 비율 (민감도 0.5)
   best_fixed: tuple = (1.0, 0.0)  # 최선 고정값 (m, θ): 튜닝 반복 누적 이윤 평균 최대 (tune_fixed.json)
   a_max: float = 1e4  # 가상 공급자 단가 (Chu 6.1절): 모든 묶음 가치보다 커서 실제 배정에는 쓰이지 않고 padding 문제가 항상 풀린다
   # Q̂ 학습 (ref/decisions.md "Q̂ 학습 자료", "Q̂ 탐색 예산"): 학습 반복 rep0_train부터 n_train개, 그중 마지막 n_val개는 검증

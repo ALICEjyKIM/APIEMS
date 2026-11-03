@@ -1,9 +1,9 @@
 """Q̂ 입력: 입찰 전 관측(PreObs) 요약 17개와 후보 (m, θ)별 예상 청산 요약 11개, 그리고 m × 상태, θ × 상태.
-예상 청산은 policy.base.est의 추정 입찰가로 m마다 Chu IPB를 한 번 풀고, θ는 예상 쿠폰액에만 쓴다.
+예상 청산은 policy.base.est의 추정 입찰가로 m마다 Chu IPB를 한 번 풀고, θ는 예상 재참여 보상액에만 쓴다.
 선형·MLP는 같은 입력을 받는다 (ref/design.md 5장, ref/decisions.md "Q̂ 입력").
 """
 import numpy as np
-from env.sim import cands
+from env.sim import cands, hist, reward
 from mech.chu import clear
 from policy.base import est
 
@@ -35,9 +35,7 @@ def feats(cfg, o):
   rows = []
   for m, th in cands(cfg):
     p = P[m]
-    tot = wb[p.Ub].sum() + ws[p.Uj].sum()
-    f = th * p.G / tot if tot > 0 else 0.0
-    k = np.minimum(f * wb, cfg.cbar * wb)[p.Ub].sum() + np.minimum(f * ws, cfg.cbar * ws)[p.Uj].sum()
+    k = reward(cfg, th, p.G, np.r_[wb, ws], np.r_[hist(cfg, o.hb, p.win), hist(cfg, o.hs, p.y.sum(1) > 0)]).sum()
     a = np.array([m, th, _mu(p.win), p.G, p.sw, p.Ub.sum(), p.Uj.sum(), wb[p.Ub].sum(), ws[p.Uj].sum(), k, (p.Q > cap).sum()])
     rows.append(np.concatenate([s, a, m * s, th * s]))
   return np.array(rows)

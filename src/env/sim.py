@@ -1,4 +1,4 @@
-"""반복 조달 시장의 기간 엔진: 입찰 전 관측(PreObs) → 1단계 결정 (m, θ) → Chu IPB 청산 → 쿠폰 → 재참여 → 다음 기간 시장.
+"""반복 조달 시장의 기간 엔진: 입찰 전 관측(PreObs) → 1단계 결정 (m, θ) → Chu IPB 청산 → 재참여 보상 → 재참여 → 다음 기간 시장.
 1단계 정책은 pre()만 받는다. 이번 기간 입찰가 W, g는 엔진 안에만 있고 청산에만 쓴다 (ref/design.md 2장).
 도착·변동·재참여 난수는 (seed, 반복, 스트림, 키)로 정해 정책이 달라도 같다 (utils/rng.py).
 """
@@ -14,7 +14,7 @@ from env.ret import Ret
 class PreObs:
   """입찰 전 관측: 공개 정보와 지난 기간까지의 기록 (이번 기간 입찰가는 없다).
   주문자 행: bid 번호, q 수량, hb 이력, rb 기준점(nan = 거래 기록 없음), tb 재임, eb 지난 기간 padding 제외, W0 지난 신고 가치(nan = 신규).
-  공급자 행(활동 자리 순): slot, sid 번호, K 용량, hs, rs, ts, es, g0 지난 신고 원가. pend·wait onboard 대기 용량·남은 기간, hi 품목 부족 이력, vbar·cbar 과거 품목 평균 단위 가치·원가(nan = 기록 없음), base 품목 기준가(공개), owe 미지급 쿠폰.
+  공급자 행(활동 자리 순): slot, sid 번호, K 용량, hs, rs, ts, es, g0 지난 신고 원가. pend·wait onboard 대기 용량·남은 기간, hi 품목 부족 이력, vbar·cbar 과거 품목 평균 단위 가치·원가(nan = 기록 없음), base 품목 기준가(공개), owe 미지급 재참여 보상.
   """
   t: int
   bid: np.ndarray
@@ -46,6 +46,18 @@ def _new(pid, prof, cfg, last):
   return dict(id=pid, prof=prof, cur=prof, h=cfg.h0, r=np.nan, ten=0, ex=False, last=last)
 
 
+# 이번 거래 e를 반영한 이력 h_rho h + (1 − h_rho) e
+def hist(cfg, h, e):
+  return cfg.h_rho * np.asarray(h, float) + (1 - cfg.h_rho) * np.asarray(e, float)
+
+
+# 재참여 보상: 총액 θ G를 공개 가중치 ω × 이력 h 비중으로 나누고 1인 상한 cbar ω. 다음 기간에 돌아오면 지급
+def reward(cfg, th, G, w, h):
+  tot = (w * h).sum()
+  f = th * G / tot if tot > 0 else 0.0
+  return np.minimum(f * w * h, cfg.cbar * w)
+
+
 # 1단계 후보: m_grid × theta_grid 전부 (가상 공급자로 padding 문제가 항상 풀린다)
 def cands(cfg):
   return [(m, th) for m in cfg.m_grid for th in cfg.theta_grid]
@@ -54,7 +66,7 @@ def cands(cfg):
 class Sim:
   """한 반복(rep)의 시장. 생성하면 기간 0 시장이 준비되고, step(m, θ)마다 한 기간을 진행해 기록을 돌려준다.
   주문자는 도착 순 번호, 공급자는 자리 j에 번호(기간 0은 j, 기간 t에 들어온 후보는 t·n_sup + j)를 둔다.
-  떠난 공급자 자리는 onboard 기간 뒤 새 후보가 채우고, 쿠폰은 발행 다음 기간에 돌아온 사람에게만 지급한다.
+  떠난 공급자 자리는 onboard 기간 뒤 새 후보가 채우고, 재참여 보상은 발표 다음 기간에 돌아온 사람에게만 지급한다.
   """
 
   def __init__(self, cfg, rep):
@@ -104,13 +116,12 @@ class Sim:
     sb, ss = np.where(o.win, W - o.p, 0.0), o.R.sum(1) - (g * o.y).sum(1)
     eb, es = o.win, o.y.sum(1) > 0
     wb, ws = q @ mk.base, K @ mk.base
-    tot = wb[o.Ub].sum() + ws[o.Uj].sum()
-    f = th * o.G / tot if tot > 0 else 0.0
-    kb = np.where(o.Ub, np.minimum(f * wb, cfg.cbar * wb), 0.0)
-    ks = np.where(o.Uj, np.minimum(f * ws, cfg.cbar * ws), 0.0)
-    xb, xs = (sb + cfg.cpn_w * kb) / W, (ss + cfg.cpn_w * ks) / (g * K).sum(1)
     bs, sp = [self.B[i] for i in self.bid], [self.S[j] for j in self.slot]
     h = lambda v, k: np.array([x[k] for x in v], float)
+    k = reward(cfg, th, o.G, np.r_[wb, ws], np.r_[hist(cfg, h(bs, "h"), eb), hist(cfg, h(sp, "h"), es)])
+    kb, ks, sold = k[:len(wb)], k[len(wb):], (g * o.y).sum(1)
+    xb = sb / W + cfg.cpn_w * kb / wb
+    xs = np.divide(ss, sold, out=np.zeros_like(ss), where=sold > 0) + cfg.cpn_w * ks / ws
     pb = self.ret.prob("buy", eb, xb, h(bs, "h"), h(bs, "r"), o.Ub)
     ps = self.ret.prob("sup", es, xs, h(sp, "h"), h(sp, "r"), o.Uj)
     zb = np.array([ret_u(cfg, rep, "buy", b["id"], t) < p for b, p in zip(bs, pb)], bool)
@@ -130,7 +141,7 @@ class Sim:
   def _update(self, v, e, x, u, last):
     c = self.cfg
     for p, ek, xk, uk, lk in zip(v, e, x, u, last):
-      p["h"] = c.h_rho * p["h"] + (1 - c.h_rho) * float(ek)
+      p["h"] = float(hist(c, p["h"], ek))
       if ek:
         p["r"] = xk if np.isnan(p["r"]) else c.r_rho * p["r"] + (1 - c.r_rho) * xk
       p["ten"], p["ex"], p["last"] = p["ten"] + 1, bool(uk), np.asarray(lk, float)

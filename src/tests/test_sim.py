@@ -1,4 +1,4 @@
-"""기간 엔진 테스트: 재참여 확률표, 입찰가 불변, 공통 난수, 쿠폰 장부, 이력·기준점 갱신, onboard.
+"""기간 엔진 테스트: 재참여 확률표, 입찰가 불변, 공통 난수, 재참여 보상 장부, 잉여율, 이력·기준점 갱신, onboard.
 재참여 확률은 세 점과 기준점·제외 항의 정의를 손으로 계산한 값과 비교한다.
 엔진 테스트는 기준 시장 반복 0을 짧게(T = 6) 돌린다.
 """
@@ -55,16 +55,17 @@ def test_common_random_numbers():
       assert z == (ret_u(CFG, 0, "buy", i, r["t"]) < p)
 
 
-# 쿠폰: padding 제외자에게만, 상한 cbar ω 이내, 총액 θ G 이내, 다음 기간 돌아온 사람에게만 지급
-def test_coupon_ledger():
+# 재참여 보상: 총액 θ G를 ω × 이력(이번 거래 반영) 비중으로 나누고 상한 cbar ω 이내, 다음 기간 돌아온 사람에게만 지급
+def test_reward_ledger():
   s, R = Sim(CFG, 0), []
   for t in range(CFG.T):
     o = s.pre()
     r = s.step(1.25, 0.5)
-    wb, ws = o.q @ s.mk.base, o.K @ s.mk.base
-    assert (r["kb"][~r["Ub"]] == 0).all() and (r["ks"][~r["Uj"]] == 0).all()
-    assert (r["kb"] <= CFG.cbar * wb + 1e-9).all() and (r["ks"] <= CFG.cbar * ws + 1e-9).all()
-    assert r["cpn"] <= 0.5 * r["G"] + 1e-9
+    w, k = np.r_[o.q @ s.mk.base, o.K @ s.mk.base], np.r_[r["kb"], r["ks"]]
+    h = CFG.h_rho * np.r_[o.hb, o.hs] + (1 - CFG.h_rho) * np.r_[r["eb"], r["es"]]
+    assert (k <= CFG.cbar * w + 1e-9).all() and r["cpn"] <= 0.5 * r["G"] + 1e-9
+    free = (k < CFG.cbar * w - 1e-9) & (h > 0)
+    assert np.allclose(k[free] / (w * h)[free], (k[free] / (w * h)[free]).mean())
     assert r["Pi"] == pytest.approx(r["G"] - r["paid"])
     if R:
       p = R[-1]
@@ -73,6 +74,17 @@ def test_coupon_ledger():
     R.append(r)
   assert sum(r["cpn"] for r in R) > 0
   assert all(r["cpn"] == 0 for r in run(CFG, 0, lambda o: (1.25, 0.0)))
+
+
+# 잉여율: 주문자는 묶음 가치, 공급자는 판 양의 원가로 나누고(못 팔면 0), 보상은 공개 가중치 ω로 나눠 더한다
+def test_surplus_rate():
+  s = Sim(CFG, 0)
+  o, (W, g) = s.pre(), s.bids()
+  r = s.step(1.0, 0.5)
+  sold = (g * r["y"]).sum(1)
+  assert ((sold > 0) == r["es"]).all() and (~r["es"]).any()
+  xs = np.where(sold > 0, r["ss"] / np.where(sold > 0, sold, 1), 0) + CFG.cpn_w * r["ks"] / (o.K @ s.mk.base)
+  assert np.allclose(r["xs"], xs) and np.allclose(r["xb"], r["sb"] / W + CFG.cpn_w * r["kb"] / (o.q @ s.mk.base))
 
 
 # 이력·기준점: 남은 주문자의 h는 h_rho h + (1 − h_rho) e, 처음 거래한 주문자의 r은 그 기간 x
