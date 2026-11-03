@@ -1,7 +1,8 @@
 """Q̂ 근사 (N5): 선형(ridge 닫힌 해)과 MLP(torch)를 같은 입력, 같은 탐색 예산 8개로 학습한다.
-목표는 고정 padding 대비 남은 누적 이윤 차이 A. 입력은 학습 자료 평균·표준편차로, 목표는 표준편차로 나눈다.
-선택 기준은 검증 상태에서 Â 최대 후보의 실제 A 평균이다 (ref/decisions.md "Q̂ 탐색 예산").
+1차 목표는 고정 padding 대비 남은 누적 이윤 차이 A, 2차(TD)는 기간마다 Π + max Q̂_{t+1}(다음 상태)이다. 입력은 평균·표준편차로, 목표는 표준편차로 나눈다.
+선택 기준은 검증 상태에서 Â 최대 후보의 실제 A 평균이다 (ref/decisions.md "Q̂ 탐색 예산", "TD 학습 (2차)").
 """
+from copy import deepcopy
 import numpy as np
 import torch
 
@@ -17,11 +18,25 @@ class Q:
 
   # 입력 행렬 → Â
   def __call__(self, X):
-    Z = (X - self.mu) / self.sd
+    Z = (np.asarray(X, float) - self.mu) / self.sd
     if self.w is not None:
       return (np.c_[np.ones(len(Z)), Z] @ self.w) * self.ys
     with torch.no_grad():
       return self.net(torch.tensor(Z)).numpy()[:, 0] * self.ys
+
+
+class QT:
+  """기간별 Q̂ 묶음 (TD): 입력 첫 열 t/T로 그 기간의 Q̂_t를 골라 쓴다.
+  한 번 호출에 들어오는 행렬은 한 상태의 후보들이라 기간이 같다.
+  Q처럼 Pool로 넘길 수 있다.
+  """
+
+  def __init__(self, qs, T):
+    self.qs, self.T = qs, T
+
+  # 입력 행렬 → Â (그 기간의 Q̂_t)
+  def __call__(self, X):
+    return self.qs[int(round(X[0, 0] * self.T))](X)
 
 
 # 표준화 계수 (표준편차 0인 열은 1)
@@ -38,8 +53,8 @@ def ridge(X, Y, mu, sd, ys, lam):
   return Q(mu, sd, ys, w=np.linalg.solve(Z.T @ Z + P, Z.T @ (Y / ys)))
 
 
-# MLP: 층 L개 × 숨은 H, ReLU, Adam(lr), 배치·에폭은 Cfg, 난수는 cfg.seed
-def mlp(cfg, X, Y, mu, sd, ys, L, H, lr):
+# MLP: 층 L개 × 숨은 H, ReLU, Adam(lr), 배치·에폭은 Cfg, 난수는 cfg.seed. hold = (X, Y)를 주면 10에폭마다 그 제곱오차가 가장 작은 시점을 쓴다
+def mlp(cfg, X, Y, mu, sd, ys, L, H, lr, hold=None):
   torch.manual_seed(cfg.seed)
   mods, d = [], X.shape[1]
   for _ in range(L):
@@ -48,12 +63,26 @@ def mlp(cfg, X, Y, mu, sd, ys, L, H, lr):
   net = torch.nn.Sequential(*mods, torch.nn.Linear(d, 1)).double()
   opt = torch.optim.Adam(net.parameters(), lr=lr)
   Xt, Yt, g = torch.tensor((X - mu) / sd), torch.tensor(Y / ys)[:, None], torch.Generator().manual_seed(cfg.seed)
-  for _ in range(cfg.mlp_epochs):
+  best = (np.inf, None)
+  for e in range(cfg.mlp_epochs):
     for i in torch.randperm(len(Xt), generator=g).split(cfg.mlp_batch):
       opt.zero_grad()
       ((net(Xt[i]) - Yt[i]) ** 2).mean().backward()
       opt.step()
+    if hold is not None and (e + 1) % 10 == 0:
+      err = float(((Q(mu, sd, ys, net=net)(hold[0]) - hold[1]) ** 2).mean())
+      best = min(best, (err, deepcopy(net.state_dict())), key=lambda b: b[0])
+  if best[1] is not None:
+    net.load_state_dict(best[1])
   return Q(mu, sd, ys, net=net.eval())
+
+
+# TD 목표: Π + max_a' q(다음 상태, a') (q가 없으면 마지막 기간이라 Π)
+def target(q, P, Xn):
+  if q is None:
+    return P
+  n, k = P.shape
+  return P + q(Xn.reshape(-1, Xn.shape[-1])).reshape(n, k, -1).max(2)
 
 
 # 검증 점수: 상태마다 점수 최대 후보(동점은 앞)의 실제 A 평균, 그리고 예측 제곱오차

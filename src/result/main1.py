@@ -1,9 +1,10 @@
-"""본 실험 1차 (메인·질문 1): 평가 반복 0~29에서 고정 padding(= 최선 고정값), 한 기간 최적, Q̂ 선형, Q̂ MLP, 제안 방법의 padding만·쿠폰만을 같은 공통 난수로 돌린다.
-제안 방법은 train_qhat.json의 검증 점수가 높은 근사 방법이다 (ref/decisions.md "본 실험 1차").
-결과는 result/runs/exp_main1.json. 실행: src/에서 python -m result.main1
+"""본 실험 (메인·질문 1): 평가 반복 0~29에서 고정 padding(= 최선 고정값), 한 기간 최적, Q̂ 선형, Q̂ MLP, 제안 방법의 padding만·쿠폰만을 같은 공통 난수로 돌린다.
+1차는 Q̂를 train_qhat.json·qhat.pkl에서, 2차(td)는 train_td.json·qhat_td.pkl에서 읽고, 제안 방법은 검증 점수가 높은 근사 방법이다 (ref/decisions.md "본 실험 1차", "TD 학습 (2차)").
+결과는 result/runs/exp_main1.json, exp_main2.json. 실행: src/에서 python -m result.main1 [td]
 """
 import json
 import pickle
+import sys
 from multiprocessing import Pool
 import numpy as np
 from utils.params import Cfg
@@ -25,9 +26,9 @@ def one(args):
 
 
 def main():
-  cfg = Cfg()
-  Qs = pickle.load(open("result/data/qhat.pkl", "rb"))
-  prop = json.load(open("result/runs/train_qhat.json"))["proposal"]
+  cfg, td = Cfg(), sys.argv[1:] == ["td"]
+  Qs = pickle.load(open("result/data/qhat_td.pkl" if td else "result/data/qhat.pkl", "rb"))
+  prop = json.load(open("result/runs/train_td.json" if td else "result/runs/train_qhat.json"))["proposal"]
   pols = [("fixed", None, None), ("myopic", None, None), ("q_lin", Qs["lin"], None), ("q_mlp", Qs["mlp"], None), ("pad_only", Qs[prop], "pad"), ("cpn_only", Qs[prop], "cpn")]
   with Pool(20) as p:
     rows = p.map(one, [(cfg, r, n, q, o) for n, q, o in pols for r in range(cfg.reps)], chunksize=1)
@@ -45,7 +46,7 @@ def main():
   d = {n: tot[n] - tot["fixed"] for n in tot}
   inter = d["q_" + prop] - d["pad_only"] - d["cpn_only"]
   out = dict(cfg=repr(cfg), proposal="q_" + prop, summary=summ, interaction=dict(mean=float(inter.mean()), ci=ci(inter)), rows=rows)
-  json.dump(out, open("result/runs/exp_main1.json", "w"), indent=1)
+  json.dump(out, open("result/runs/exp_main2.json" if td else "result/runs/exp_main1.json", "w"), indent=1)
   print(json.dumps(dict(proposal=out["proposal"], summary=summ, interaction=out["interaction"]), indent=1))
 
 
