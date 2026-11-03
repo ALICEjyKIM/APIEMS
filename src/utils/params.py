@@ -78,6 +78,11 @@ class Cfg:
   mlp_lr: tuple = (1e-3, 3e-3)
   mlp_epochs: int = 200
   mlp_batch: int = 256
+  # TD 학습 (2차, ref/decisions.md "TD 학습"): 학습 반복 rep0_td부터 n_td개, 그중 마지막 n_hold개 반복은 MLP 조기 종료용
+  rep0_td: int = 3000
+  n_td: int = 300
+  n_hold: int = 60
+  n_proc: int = 20  # 병렬 작업자 수
   # 솔버 (gurobipy): VCG 차이를 정확히 쓰므로 MIPGap 0
   grb_seed: int = 0
   grb_threads: int = 1
