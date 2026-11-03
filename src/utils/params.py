@@ -48,8 +48,8 @@ class Cfg:
   r2_p0: float = 0.5
   r2_p1: float = 0.7
   r2_p2: float = 0.85
-  r2_rate_buy: float = 0.156
-  r2_rate_sup: float = 0.035
+  r2_rate_buy: float = 0.153
+  r2_rate_sup: float = 0.096
   # 거래 이력 h ← h_rho·h + (1 − h_rho)·e, logit에 h_w·β2·(h − h0)
   h_rho: float = 0.8
   h_w: float = 1.0
