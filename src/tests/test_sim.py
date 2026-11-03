@@ -8,7 +8,7 @@ import pytest
 from utils.params import Cfg
 from utils.rng import ret_u
 from env.ret import Ret, lg
-from env.sim import Sim, run, cands
+from env.sim import Sim, run
 
 CFG = replace(Cfg(), T=6)
 
@@ -29,7 +29,7 @@ def test_ret_table():
   assert lg(p("buy", 0, 0, h=1.0)) - lg(p("buy", 0, 0)) == pytest.approx(c.h_w * R.b2 * (1 - c.h0))
 
 
-# 1단계 관측은 이번 기간 입찰가를 읽지 않는다: 입찰가만 바꿔도 PreObs와 후보가 같다
+# 1단계 관측은 이번 기간 입찰가를 읽지 않는다: 입찰가만 바꿔도 PreObs가 같다
 def test_preobs_bid_invariant():
   s = Sim(CFG, 0)
   for _ in range(3):
@@ -39,7 +39,6 @@ def test_preobs_bid_invariant():
   b = s.pre()
   for f in fields(a):
     assert np.array_equal(getattr(a, f.name), getattr(b, f.name), equal_nan=True), f.name
-  assert cands(CFG, a) == cands(CFG, b)
 
 
 # 공통 난수: 정책이 달라도 같은 기간의 신규 주문자와 같은 참여자의 재참여 난수가 같다

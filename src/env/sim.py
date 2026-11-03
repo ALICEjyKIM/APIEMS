@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 from utils import market
 from utils.rng import ret_u
-from mech.chu import clear, pad
+from mech.chu import clear
 from env.ret import Ret
 
 
@@ -45,10 +45,9 @@ def _new(pid, prof, cfg, last):
   return dict(id=pid, prof=prof, cur=prof, h=cfg.h0, r=np.nan, ten=0, ex=False, last=last)
 
 
-# 1단계 후보: m_grid × theta_grid 중 Q_c가 품목 c의 활동 공급 용량을 넘지 않는 것
-def cands(cfg, o):
-  ok = [m for m in cfg.m_grid if (pad(cfg, m, o.q, o.K) <= o.K.sum(0)).all()]
-  return [(m, th) for m in ok for th in cfg.theta_grid]
+# 1단계 후보: m_grid × theta_grid 전부 (가상 공급자로 padding 문제가 항상 풀린다)
+def cands(cfg):
+  return [(m, th) for m in cfg.m_grid for th in cfg.theta_grid]
 
 
 class Sim:
