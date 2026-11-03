@@ -1,4 +1,4 @@
-"""TD 학습 (N5 2차): result/data/td/*.npz로 기간 29부터 1까지 거꾸로 Q̂_t를 학습한다 (fitted Q iteration). 목표 = Π + max_a' Q̂_{t+1}(다음 상태, a').
+"""TD 학습 (N5 2차): result/data/td/*.npz로 기간 29부터 1까지 거꾸로 행동 정책의 Q̂_t를 학습한다 (expected SARSA). 목표 = Π + (1 − eps) Q̂_{t+1}(S', 고정) + eps 평균 Q̂_{t+1}(S', ·).
 선형·MLP 탐색 예산 8개씩, 한 설정을 모든 기간에 쓴다. 학습은 조기 종료용 반복을 뺀 반복으로 하고, MLP만 그 반복의 제곱오차로 멈출 시점을 고른다.
 선택 기준은 1차 자료 adv.npz 전체 상태에서 고른 후보의 실제 A 평균. 결과 result/runs/train_td.json, 모형 result/data/qhat_td.pkl. 실행: src/에서 python -m result.train_td
 """
@@ -20,19 +20,20 @@ def load():
 # 한 설정으로 기간 T−1부터 1까지 Q̂_t를 학습
 def fqi(cfg, X, P, Xn, t, hold, name, h):
   n, k, d = X.shape
-  qs = {}
+  q = QT({}, cfg.T, {}, {})
   for s in range(cfg.T - 1, 0, -1):
     i = t == s
-    y = target(qs.get(s + 1), P[i], Xn[i])
+    y = target(q if s + 1 in q.qs else None, P[i], Xn[i], cfg.eps)
+    q.lo[s], q.hi[s] = float(y.min()), float(y.max())
     a, b = i & ~hold, i & hold
     Xa, ya = X[a].reshape(-1, d).astype(float), y[~hold[i]].reshape(-1)
     mu, sd = scaler(Xa)
     ys = float(ya.std()) or 1.0
     if name == "lin":
-      qs[s] = ridge(Xa, ya, mu, sd, ys, **h)
+      q.qs[s] = ridge(Xa, ya, mu, sd, ys, **h)
     else:
-      qs[s] = mlp(cfg, Xa, ya, mu, sd, ys, **h, hold=(X[b].reshape(-1, d).astype(float), y[hold[i]].reshape(-1)))
-  return QT(qs, cfg.T)
+      q.qs[s] = mlp(cfg, Xa, ya, mu, sd, ys, **h, hold=(X[b].reshape(-1, d).astype(float), y[hold[i]].reshape(-1)))
+  return q
 
 
 def main():

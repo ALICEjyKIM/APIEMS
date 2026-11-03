@@ -1,5 +1,5 @@
 """Q̂ 근사 (N5): 선형(ridge 닫힌 해)과 MLP(torch)를 같은 입력, 같은 탐색 예산 8개로 학습한다.
-1차 목표는 고정 padding 대비 남은 누적 이윤 차이 A, 2차(TD)는 기간마다 Π + max Q̂_{t+1}(다음 상태)이다. 입력은 평균·표준편차로, 목표는 표준편차로 나눈다.
+1차 목표는 고정 padding 대비 남은 누적 이윤 차이 A, 2차(TD)는 기간마다 Π + 행동 정책의 다음 상태 가치 Q̂_{t+1}이다. 입력은 평균·표준편차로, 목표는 표준편차로 나눈다.
 선택 기준은 검증 상태에서 Â 최대 후보의 실제 A 평균이다 (ref/decisions.md "Q̂ 탐색 예산", "TD 학습 (2차)").
 """
 from copy import deepcopy
@@ -26,17 +26,18 @@ class Q:
 
 
 class QT:
-  """기간별 Q̂ 묶음 (TD): 입력 첫 열 t/T로 그 기간의 Q̂_t를 골라 쓴다.
-  한 번 호출에 들어오는 행렬은 한 상태의 후보들이라 기간이 같다.
-  Q처럼 Pool로 넘길 수 있다.
+  """기간별 Q̂ 묶음 (TD): 입력 첫 열 t/T로 그 기간의 Q̂_t를 골라 쓰고, 그 기간 학습 목표의 범위 [lo, hi]로 자른다.
+  자르지 않으면 학습에 드문 다음 상태에서 외삽한 값이 max로 뽑혀 앞 기간으로 커진다.
+  한 번 호출에 들어오는 행렬은 한 상태의 후보들이라 기간이 같다. Q처럼 Pool로 넘길 수 있다.
   """
 
-  def __init__(self, qs, T):
-    self.qs, self.T = qs, T
+  def __init__(self, qs, T, lo, hi):
+    self.qs, self.T, self.lo, self.hi = qs, T, lo, hi
 
-  # 입력 행렬 → Â (그 기간의 Q̂_t)
+  # 입력 행렬 → Â (그 기간의 Q̂_t, 목표 범위로 자름)
   def __call__(self, X):
-    return self.qs[int(round(X[0, 0] * self.T))](X)
+    s = int(round(X[0, 0] * self.T))
+    return np.clip(self.qs[s](X), self.lo[s], self.hi[s])
 
 
 # 표준화 계수 (표준편차 0인 열은 1)
@@ -77,12 +78,13 @@ def mlp(cfg, X, Y, mu, sd, ys, L, H, lr, hold=None):
   return Q(mu, sd, ys, net=net.eval())
 
 
-# TD 목표: Π + max_a' q(다음 상태, a') (q가 없으면 마지막 기간이라 Π)
-def target(q, P, Xn):
+# TD 목표: Π + 행동 정책의 다음 상태 가치 (1 − eps) q(S', 고정 padding) + eps 평균_a' q(S', a') (q가 없으면 마지막 기간이라 Π)
+def target(q, P, Xn, eps):
   if q is None:
     return P
   n, k = P.shape
-  return P + q(Xn.reshape(-1, Xn.shape[-1])).reshape(n, k, -1).max(2)
+  v = q(Xn.reshape(-1, Xn.shape[-1])).reshape(n, k, -1)
+  return P + (1 - eps) * v[:, :, 0] + eps * v.mean(2)
 
 
 # 검증 점수: 상태마다 점수 최대 후보(동점은 앞)의 실제 A 평균, 그리고 예측 제곱오차
