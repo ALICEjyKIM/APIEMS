@@ -67,6 +67,17 @@ class Cfg:
   cpn_w: float = 1.0  # 쿠폰을 재참여의 x에 넣는 비율 (민감도 0.5)
   best_fixed: tuple = (1.0, 0.0)  # 최선 고정값 (m, θ): 튜닝 반복 누적 이윤 평균 최대 (tune_fixed.json)
   a_max: float = 1e4  # 가상 공급자 단가 (Chu 6.1절): 모든 묶음 가치보다 커서 실제 배정에는 쓰이지 않고 padding 문제가 항상 풀린다
+  # Q̂ 학습 (ref/decisions.md "Q̂ 학습 자료", "Q̂ 탐색 예산"): 학습 반복 rep0_train부터 n_train개, 그중 마지막 n_val개는 검증
+  eps: float = 0.1  # 행동 정책이 후보를 무작위로 고를 확률 (나머지는 고정 padding)
+  rep0_train: int = 2000
+  n_train: int = 100
+  n_val: int = 20
+  ridge_grid: tuple = (1e-3, 1e-2, 0.1, 1.0, 10.0, 100.0, 1e3, 1e4)
+  mlp_layers: tuple = (2, 3)
+  mlp_hidden: tuple = (32, 64)
+  mlp_lr: tuple = (1e-3, 3e-3)
+  mlp_epochs: int = 200
+  mlp_batch: int = 256
   # 솔버 (gurobipy): VCG 차이를 정확히 쓰므로 MIPGap 0
   grb_seed: int = 0
   grb_threads: int = 1

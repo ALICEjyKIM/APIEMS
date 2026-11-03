@@ -1,4 +1,4 @@
-"""비교 정책 테스트: 시장 통계, 추정 입찰가, 한 기간 최적의 선택 규칙과 입찰가 불변, 공통 난수 rollout.
+"""비교 정책 테스트: 시장 통계, 추정 입찰가, 한 기간 최적의 선택 규칙과 입찰가 불변, 공통 난수 rollout, Q̂ 입력과 Q̂ 정책.
 한 기간 최적은 추정 입찰가로 후보 m마다 청산한 플랫폼 몫을 직접 비교한 값과 같아야 한다.
 엔진은 기준 시장 반복 0을 짧게(T = 6) 돌린다.
 """
@@ -6,9 +6,11 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from utils.params import Cfg
-from env.sim import Sim, run
+from env.sim import Sim, run, cands
 from mech.chu import clear
 from policy.base import fixed, est, myopic
+from policy.qpol import qpol
+from value.feat import feats
 
 CFG = replace(Cfg(), T=6)
 
@@ -63,3 +65,26 @@ def test_rollout_crn():
   assert new(A) == new(B)
   assert [r["Pi"] for r in A] == [r["Pi"] for r in C]
   assert all(r["m"] == 1.0 and r["th"] == 0.0 for r in A)
+
+
+# Q̂ 입력: 후보 12개 × (상태 17 + 후보 11 + m × 상태 + θ × 상태), m·θ 열이 후보와 같고 입찰가를 바꿔도 같다
+def test_feats():
+  s = Sim(CFG, 0)
+  s.step(1.0, 0.0)
+  X = feats(CFG, s.pre())
+  assert X.shape == (len(cands(CFG)), 17 * 3 + 11)
+  assert [tuple(x[17:19]) for x in X] == cands(CFG)
+  s.W, s.g = s.W * 3 + 1, s.g * 0.2
+  assert np.array_equal(X, feats(CFG, s.pre()))
+
+
+# Q̂ 정책: 점수 최대 후보, 동점은 앞 후보, only로 제한, 기간 0은 고정 padding
+def test_qpol():
+  s = Sim(CFG, 0)
+  assert qpol(CFG, lambda X: X[:, 17])(s.pre()) == (1.0, 0.0)
+  s.step(1.0, 0.0)
+  o = s.pre()
+  assert qpol(CFG, lambda X: X[:, 17] + X[:, 18])(o) == (1.5, 0.5)
+  assert qpol(CFG, lambda X: X[:, 17] + X[:, 18], only=lambda m, th: th == 0)(o) == (1.5, 0.0)
+  assert qpol(CFG, lambda X: X[:, 17] + X[:, 18], only=lambda m, th: m == 1)(o) == (1.0, 0.5)
+  assert qpol(CFG, lambda X: np.zeros(len(X)))(o) == (1.0, 0.0)

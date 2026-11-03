@@ -25,3 +25,4 @@ gurobi.lic
 .vscode/
 *.log
 *.err
+src/result/data/

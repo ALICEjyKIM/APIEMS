@@ -1,0 +1,53 @@
+"""본 실험 1차 (메인·질문 1): 평가 반복 0~29에서 고정 padding(= 최선 고정값), 한 기간 최적, Q̂ 선형, Q̂ MLP, 제안 방법의 padding만·쿠폰만을 같은 공통 난수로 돌린다.
+제안 방법은 train_qhat.json의 검증 점수가 높은 근사 방법이다 (ref/decisions.md "본 실험 1차").
+결과는 result/runs/exp_main1.json. 실행: src/에서 python -m result.main1
+"""
+import json
+import pickle
+from multiprocessing import Pool
+import numpy as np
+from utils.params import Cfg
+from env.sim import run
+from policy.base import fixed, myopic
+from policy.qpol import qpol
+
+ONLY = {None: None, "pad": lambda m, th: th == 0, "cpn": lambda m, th: m == 1}
+
+
+# 반복 하나를 정책 하나로 돌린 기간별 기록 요약
+def one(args):
+  cfg, rep, name, q, only = args
+  pol = fixed(*cfg.best_fixed) if name == "fixed" else myopic(cfg) if name == "myopic" else qpol(cfg, q, ONLY[only])
+  R = run(cfg, rep, pol)
+  a = lambda k, f=float: [f(r[k]) for r in R]
+  return dict(name=name, rep=rep, Pi=a("Pi"), G=a("G"), cpn=a("cpn"), paid=a("paid"), sw=a("sw"), m=a("m"), th=a("th"), win=a("win", int),
+              nb=a("nb", int), ns=a("ns", int), Ub=[int(r["Ub"].sum()) for r in R], Uj=[int(r["Uj"].sum()) for r in R])
+
+
+def main():
+  cfg = Cfg()
+  Qs = pickle.load(open("result/data/qhat.pkl", "rb"))
+  prop = json.load(open("result/runs/train_qhat.json"))["proposal"]
+  pols = [("fixed", None, None), ("myopic", None, None), ("q_lin", Qs["lin"], None), ("q_mlp", Qs["mlp"], None), ("pad_only", Qs[prop], "pad"), ("cpn_only", Qs[prop], "cpn")]
+  with Pool(20) as p:
+    rows = p.map(one, [(cfg, r, n, q, o) for n, q, o in pols for r in range(cfg.reps)], chunksize=1)
+  tot = {n: np.array([sum(x["Pi"]) for x in rows if x["name"] == n]) for n, _, _ in pols}
+  ci = lambda d: float(1.96 * d.std(ddof=1) / np.sqrt(len(d)))
+  summ = {}
+  for n in tot:
+    R = [x for x in rows if x["name"] == n]
+    ms, th = np.concatenate([x["m"] for x in R]), np.concatenate([x["th"] for x in R])
+    summ[n] = dict(Pi=float(tot[n].mean()), vs_fixed=float((tot[n] - tot["fixed"]).mean()), ci_fixed=ci(tot[n] - tot["fixed"]),
+                   vs_myopic=float((tot[n] - tot["myopic"]).mean()), ci_myopic=ci(tot[n] - tot["myopic"]),
+                   m_gt1=float((ms > 1).mean()), m_mean=float(ms.mean()), th_gt0=float((th > 0).mean()),
+                   cpn=float(np.mean([sum(x["cpn"]) for x in R])), sw=float(np.mean([sum(x["sw"]) for x in R])),
+                   win=float(np.mean([sum(x["win"]) / sum(x["nb"]) for x in R])), nb=float(np.mean([np.mean(x["nb"]) for x in R])), ns=float(np.mean([np.mean(x["ns"]) for x in R])))
+  d = {n: tot[n] - tot["fixed"] for n in tot}
+  inter = d["q_" + prop] - d["pad_only"] - d["cpn_only"]
+  out = dict(cfg=repr(cfg), proposal="q_" + prop, summary=summ, interaction=dict(mean=float(inter.mean()), ci=ci(inter)), rows=rows)
+  json.dump(out, open("result/runs/exp_main1.json", "w"), indent=1)
+  print(json.dumps(dict(proposal=out["proposal"], summary=summ, interaction=out["interaction"]), indent=1))
+
+
+if __name__ == "__main__":
+  main()
