@@ -1,0 +1,25 @@
+{
+ "r_buy": 0.156,
+ "r_sup": 0.035,
+ "buy": {
+  "n": 1415,
+  "med": 0.16917975091129134,
+  "q10": 0.04261936731232667,
+  "q25": 0.09344068795249048,
+  "q75": 0.241587255797043,
+  "q90": 0.2939050338867776
+ },
+ "sup": {
+  "n": 3603,
+  "med": 0.06421453216389464,
+  "q10": 0.0073603510335144935,
+  "q25": 0.023251515585897137,
+  "q75": 0.12431849134620385,
+  "q90": 0.19747431207802071
+ },
+ "ret_buy": 0.5639377359458158,
+ "ret_sup": 0.5970210895749235,
+ "nb": 22.336,
+ "ns": 42.824,
+ "cfg": "Cfg(seed=0, T=30, reps=30, n_items=15, n_sup=60, n_alt=4, conc=0.5, het=0.5, items_per_order=2, dir_alpha=5.0, cover=1.3, onboard=2, lam_buy=10.0, ret_ss=0.5, qty_lo=2, qty_hi=5, qty_unit=3, k_ref=2, markup_lo=1.1, markup_hi=1.5, cost_lo=0.8, cost_hi=1.1, base_lo=10.0, base_hi=20.0, noise_qty=0.1, noise_price=0.05, f_ship=25.0, r2_p0=0.5, r2_p1=0.7, r2_p2=0.85, r2_rate_buy=0.156, r2_rate_sup=0.035, h_rho=0.8, h_w=1.0, h0=0.5, r_rho=0.8, eta=0.5, lam_loss=2.0, ex_p=0.4, m_grid=(1.0, 1.1, 1.25, 1.5), theta_grid=(0.0, 0.25, 0.5), cbar=0.05, cpn_w=1.0, a_max=10000.0, grb_seed=0, grb_threads=1, mip_gap=0.0, tol=1e-06)"
+}
