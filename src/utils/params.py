@@ -62,6 +62,7 @@ class Cfg:
   ex_p: float = 0.4
   # 청산(Chu IPB): Q_c = ⌈m × max(품목 c 최대 공급자 물량, 품목 c 한 주문 최대 요구량)⌉, 후보 = m_grid × theta_grid
   m_grid: tuple = (1.0, 1.1, 1.25, 1.5)
+  m_check: tuple = (1.0, 1.1, 1.25, 1.5, 2.0, 3.0)  # 규모 점검에서 같은 입찰로 비교하는 m (큰 시장의 이윤 최대 m이 1.5를 넘을 수 있음)
   theta_grid: tuple = (0.0, 0.25, 0.5)
   cbar: float = 0.05  # 재참여 보상 1인 상한 (공개 가중치 ω_i 대비)
   cpn_w: float = 1.0  # 재참여 보상 κ/ω를 재참여의 x에 넣는 비율 (민감도 0.5)
@@ -89,3 +90,7 @@ class Cfg:
   mip_gap: float = 0.0
   grb_numfocus: int = 3  # 수치 문제로 SUBOPTIMAL이면 이 NumericFocus로 한 번 더 푼다 (추정 입찰가의 동점 많은 청산)
   tol: float = 1e-6
+
+
+# 시장 조건 (ref/design.md 7장): 기준 ×1에서 바꾸는 값
+SCALE = {"x1": dict(), "x2": dict(lam_buy=20.0, n_sup=48, n_alt=8), "x4": dict(lam_buy=40.0, n_sup=96, n_alt=16)}

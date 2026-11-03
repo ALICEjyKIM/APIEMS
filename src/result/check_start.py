@@ -1,13 +1,13 @@
 """출발 점검 (N3, 설정은 ref/decisions.md "출발 점검 설정" 이하 세 줄).
 anchor: 고정 padding에서 거래한 참여자 잉여율 중앙값 (재참여 기준점), pad: 같은 입찰에서 m 후보별 빠지는 거래·플랫폼 몫,
-manip: 다품목 공급자 품목 간 조작 반례 탐색과 대조군. 실행: src/에서 python -m result.check_start {anchor|pad|manip} [r_buy r_sup | single]
+manip: 다품목 공급자 품목 간 조작 반례 탐색과 대조군. 실행: src/에서 python -m result.check_start {anchor|pad|manip} [r_buy r_sup | single | x2 | x4]
 """
 import json
 import sys
 from dataclasses import replace
 from multiprocessing import Pool
 import numpy as np
-from utils.params import Cfg
+from utils.params import Cfg, SCALE
 from env.sim import Sim
 from mech.chu import clear
 
@@ -55,9 +55,11 @@ def pad_one(args):
 
 def pad(cfg):
   bs = [b for ps in paths(cfg) for b, r in ps if r["t"] >= T0]
-  with Pool(10) as p:
-    rows = [x for rs in p.map(pad_one, [(cfg, b) for b in bs]) for x in rs]
-  summ = {}
+  with Pool(cfg.n_proc) as p:
+    res = p.map(pad_one, [(cfg, b) for b in bs])
+  rows = [x for rs in res for x in rs]
+  G = np.array([[r["G"] for r in rs] for rs in res])
+  summ = dict(best_m_gt1=float((G.argmax(1) > 0).mean()), gain_best=float((G.max(1) - G[:, 0]).mean()))
   for m in cfg.m_grid:
     R = [r for r in rows if r["m"] == m]
     a = lambda k: float(np.mean([r[k] for r in R]))
@@ -120,13 +122,15 @@ def manip(cfg):
 
 if __name__ == "__main__":
   cmd, cfg = sys.argv[1], Cfg()
-  one = sys.argv[2:] == ["single"]
+  one, sc = sys.argv[2:] == ["single"], sys.argv[2] if sys.argv[2:3] and sys.argv[2] in SCALE else None
   if one:
     cfg = replace(cfg, n_sup=cfg.n_items * cfg.n_alt)
+  elif sc:
+    cfg = replace(cfg, **SCALE[sc], m_grid=cfg.m_check)
   elif len(sys.argv) > 2:
     cfg = replace(cfg, r2_rate_buy=float(sys.argv[2]), r2_rate_sup=float(sys.argv[3]))
   out = dict(anchor=anchor, pad=pad, manip=manip)[cmd](cfg)
   out["cfg"] = repr(cfg)
-  tag = (f"_{cfg.r2_rate_buy:.4f}_{cfg.r2_rate_sup:.4f}" if cmd == "anchor" else "") + ("_single" if one else "")
+  tag = (f"_{cfg.r2_rate_buy:.4f}_{cfg.r2_rate_sup:.4f}" if cmd == "anchor" else "") + ("_single" if one else "") + (f"_{sc}" if sc else "")
   json.dump(out, open(f"result/runs/check_start_{cmd}{tag}.json", "w"), indent=1)
   print(json.dumps(out.get("summary", {k: v for k, v in out.items() if k != "cfg"}), indent=1))
