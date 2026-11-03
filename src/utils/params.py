@@ -65,6 +65,7 @@ class Cfg:
   theta_grid: tuple = (0.0, 0.25, 0.5)
   cbar: float = 0.05  # 쿠폰 상한 (공개 가중치 ω_i 대비)
   cpn_w: float = 1.0  # 쿠폰을 재참여의 x에 넣는 비율 (민감도 0.5)
+  best_fixed: tuple = (1.0, 0.0)  # 최선 고정값 (m, θ): 튜닝 반복 누적 이윤 평균 최대 (tune_fixed.json)
   a_max: float = 1e4  # 가상 공급자 단가 (Chu 6.1절): 모든 묶음 가치보다 커서 실제 배정에는 쓰이지 않고 padding 문제가 항상 풀린다
   # 솔버 (gurobipy): VCG 차이를 정확히 쓰므로 MIPGap 0
   grb_seed: int = 0
