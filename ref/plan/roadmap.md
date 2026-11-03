@@ -10,7 +10,7 @@
 | N3 출발 점검 | padding 배수별 빠지는 거래·플랫폼 몫, 잉여율 분포(기준점 측정), 다품목 반례 탐색 | result/runs/check_start_*.json, decisions.md 갱신 | 11/2 완료 (기준점 확정, pad·manip 결과) |
 | KSCM 슬라이드 | 질문·가설·설계, 출발 점검 결과 | 11/5 마감 | 11/5 |
 | N4 비교 정책 | 고정, 최선 고정값, 한 기간 최적, 예상 청산 | 공통 난수 rollout | 11/3 완료 (tests/test_policy.py, result/runs/tune_fixed.json) |
-| N5 Q̂ | 선형, MLP, MLP + 구조 요약, GNN, 같은 예산 | 검증 오차 기록 | 11/8~11/15 |
+| N5 Q̂ | 선형, MLP, MLP + 구조 요약, GNN, 같은 예산 | 검증 오차 기록 | 11/3 선형·MLP 1차 (train_qhat.json), GNN 남음 |
 | N6 본 실험 | 메인, 질문 1~3 | result/runs/exp_*.json | 11/15~11/30 |
 | N7 근사 점검 | 상태 432 정확해 | 오차, 최적성 격차 | 11월 |
 | N8 가정·조작 점검 | 재참여 함수 교차, 여러 기간 조작 | 시간이 되면 | 12월 |
