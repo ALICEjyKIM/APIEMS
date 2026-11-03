@@ -81,6 +81,11 @@ class Prob:
     self.y.LB = np.zeros(self.K.shape) if lo is None else lo
     self.y.UB = self.K if hi is None else hi
     self.m.optimize()
+    if self.m.Status == GRB.SUBOPTIMAL:
+      self.m.setParam("NumericFocus", self.cfg.grb_numfocus)
+      self.m.reset()
+      self.m.optimize()
+      self.m.setParam("NumericFocus", 0)
     assert self.m.Status == GRB.OPTIMAL
     self.n += 1
     x, y, z = np.round(self.x.X).astype(bool), np.round(self.y.X).astype(int), np.round(self.z.X)

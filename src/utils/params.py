@@ -87,4 +87,5 @@ class Cfg:
   grb_seed: int = 0
   grb_threads: int = 1
   mip_gap: float = 0.0
+  grb_numfocus: int = 3  # 수치 문제로 SUBOPTIMAL이면 이 NumericFocus로 한 번 더 푼다 (추정 입찰가의 동점 많은 청산)
   tol: float = 1e-6
