@@ -10,7 +10,7 @@ from utils.params import Cfg
 from env.sim import Sim, run, cands
 from mech.chu import clear
 from policy.base import fixed, est, myopic
-from policy.qpol import qpol
+from policy.qpol import qpol, build
 from value.feat import feats, plan
 
 CFG = replace(Cfg(), T=6)
@@ -99,3 +99,22 @@ def test_qpol():
   assert qpol(CFG, lambda X: X[:, 17] + X[:, 18], only=lambda m, th: th == 0)(o) == (1.5, 0.0)
   assert qpol(CFG, lambda X: X[:, 17] + X[:, 18], only=lambda m, th: m == 1)(o) == (1.0, 0.5)
   assert qpol(CFG, lambda X: np.zeros(len(X)))(o) == (1.0, 0.0)
+
+
+# Q̂ 정책의 입력 형태: struct는 표 + 구조 요약, graph는 (표, m_grid 순 그래프 4개). 같은 점수 함수면 tab과 같은 후보를 고른다
+def test_qpol_kinds():
+  s = Sim(CFG, 0)
+  s.step(1.0, 0.0)
+  o = s.pre()
+  f = lambda X: X[:, 17] + X[:, 18]
+  assert qpol(CFG, f, kind="struct")(o) == qpol(CFG, f)(o) == (1.5, 0.5)
+  assert qpol(CFG, lambda inp: f(inp[0]) + 0 * len(inp[1]), kind="graph")(o) == (1.5, 0.5)
+  X, G = build(CFG, o, "graph")
+  assert X.shape == (len(cands(CFG)), 17 * 3 + 11) and len(G) == len(CFG.m_grid) and build(CFG, o, "struct").shape[1] == X.shape[1] + 66
+
+
+# 질문 3 본 실험의 반복 하나: GNN 입력 정책으로 T기간을 돌려 기록 요약과 시간을 낸다 (기간 0은 고정 padding)
+def test_main_q3_one():
+  from result.main_q3 import one
+  r = one((CFG, 0, "q_gnn", lambda inp: inp[0][:, 17]))
+  assert len(r["Pi"]) == CFG.T and r["m"][0] == 1.0 and all(m == 1.5 for m in r["m"][1:]) and r["sec"] > 0

@@ -15,14 +15,18 @@ from policy.qpol import qpol
 ONLY = {None: None, "pad": lambda m, th: th == 0, "cpn": lambda m, th: m == 1}
 
 
+# 기간별 기록 R의 요약
+def rec(name, rep, R):
+  a = lambda k, f=float: [f(r[k]) for r in R]
+  return dict(name=name, rep=rep, Pi=a("Pi"), G=a("G"), cpn=a("cpn"), paid=a("paid"), sw=a("sw"), m=a("m"), th=a("th"), win=a("win", int),
+              nb=a("nb", int), ns=a("ns", int), Ub=[int(r["Ub"].sum()) for r in R], Uj=[int(r["Uj"].sum()) for r in R])
+
+
 # 반복 하나를 정책 하나로 돌린 기간별 기록 요약
 def one(args):
   cfg, rep, name, q, only = args
   pol = fixed(*cfg.best_fixed) if name == "fixed" else myopic(cfg) if name == "myopic" else qpol(cfg, q, ONLY[only])
-  R = run(cfg, rep, pol)
-  a = lambda k, f=float: [f(r[k]) for r in R]
-  return dict(name=name, rep=rep, Pi=a("Pi"), G=a("G"), cpn=a("cpn"), paid=a("paid"), sw=a("sw"), m=a("m"), th=a("th"), win=a("win", int),
-              nb=a("nb", int), ns=a("ns", int), Ub=[int(r["Ub"].sum()) for r in R], Uj=[int(r["Uj"].sum()) for r in R])
+  return rec(name, rep, run(cfg, rep, pol))
 
 
 def main():
