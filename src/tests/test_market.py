@@ -1,7 +1,8 @@
 """시장 생성 테스트.
-이전 구조(PROC15H)의 생성 코드에서 뽑은 기준 자료(tests/data/legacy_market.npz)와 같은 값이 나오는지 확인한다.
+다품목 조건(n_sup_multi)에서 이전 구조(PROC15H)의 기준 자료(tests/data/legacy_market.npz)와 같은 값이 나오는지 확인한다.
 기준 시장 통계(명목 수요·용량)와 공통 난수(같은 키 → 같은 값)도 확인한다.
 """
+from dataclasses import replace
 from pathlib import Path
 import numpy as np
 import pytest
@@ -15,7 +16,7 @@ REF = np.load(Path(__file__).parent / "data" / "legacy_market.npz")
 # 기준 자료와 같은 시장·도착·후보·변동·재참여 난수
 @pytest.mark.parametrize("rep", range(3))
 def test_same_as_legacy(rep):
-  cfg = Cfg()
+  cfg = replace(Cfg(), n_sup=Cfg().n_sup_multi)
   mk = make(cfg, rep)
   for k, v in dict(base=mk.base, w=mk.w, ntgt=mk.n_tgt, K=mk.K, deg=mk.deg,
                    sqty=np.array([s.qty for s in mk.sups]), sprice=np.array([s.price for s in mk.sups])).items():
@@ -49,3 +50,12 @@ def test_common_random_numbers():
   a, b = new_buyers(cfg, mk, 0, 5), new_buyers(cfg, mk, 0, 5)
   assert len(a) == len(b) and all(np.array_equal(x.qty, y.qty) for x, y in zip(a, b))
   assert ret_u(cfg, 0, "buy", 3, 2) == ret_u(cfg, 0, "buy", 3, 2) != ret_u(cfg, 0, "buy", 3, 3)
+
+
+# 기본 시장: 공급자 자리와 빈자리 후보가 모두 품목 하나만 판다 (Chu Theorem 5 조건)
+def test_single_item_suppliers():
+  cfg = Cfg()
+  for rep in range(3):
+    mk = make(cfg, rep)
+    assert (mk.deg == 1).all() and all(s.items.sum() == 1 for s in mk.sups)
+    assert all(candidate(cfg, mk, rep, t, j).items.sum() == 1 for t in range(3) for j in range(cfg.n_sup))

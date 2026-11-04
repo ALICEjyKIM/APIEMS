@@ -1,6 +1,6 @@
 """출발 점검 (N3, 설정은 ref/decisions.md "출발 점검 설정" 이하 세 줄).
 anchor: 고정 padding에서 거래한 참여자 잉여율 중앙값 (재참여 기준점), pad: 같은 입찰에서 m 후보별 빠지는 거래·플랫폼 몫,
-manip: 다품목 공급자 품목 간 조작 반례 탐색과 대조군. 실행: src/에서 python -m result.check_start {anchor|pad|manip} [r_buy r_sup | single | x2 | x4]
+manip: 다품목 공급자 품목 간 조작 반례 탐색과 대조군. 실행: src/에서 python -m result.check_start {anchor|pad|manip} [r_buy r_sup | multi | x2 | x4]
 """
 import json
 import sys
@@ -122,15 +122,15 @@ def manip(cfg):
 
 if __name__ == "__main__":
   cmd, cfg = sys.argv[1], Cfg()
-  one, sc = sys.argv[2:] == ["single"], sys.argv[2] if sys.argv[2:3] and sys.argv[2] in SCALE else None
+  one, sc = sys.argv[2:] == ["multi"], sys.argv[2] if sys.argv[2:3] and sys.argv[2] in SCALE else None
   if one:
-    cfg = replace(cfg, n_sup=cfg.n_items * cfg.n_alt)
+    cfg = replace(cfg, n_sup=cfg.n_sup_multi)
   elif sc:
     cfg = replace(cfg, **SCALE[sc], m_grid=cfg.m_check)
   elif len(sys.argv) > 2:
     cfg = replace(cfg, r2_rate_buy=float(sys.argv[2]), r2_rate_sup=float(sys.argv[3]))
   out = dict(anchor=anchor, pad=pad, manip=manip)[cmd](cfg)
   out["cfg"] = repr(cfg)
-  tag = (f"_{cfg.r2_rate_buy:.4f}_{cfg.r2_rate_sup:.4f}" if cmd == "anchor" else "") + ("_single" if one else "") + (f"_{sc}" if sc else "")
+  tag = (f"_{cfg.r2_rate_buy:.4f}_{cfg.r2_rate_sup:.4f}" if cmd == "anchor" else "") + ("_multi" if one else "") + (f"_{sc}" if sc else "")
   json.dump(out, open(f"result/runs/check_start_{cmd}{tag}.json", "w"), indent=1)
   print(json.dumps(out.get("summary", {k: v for k, v in out.items() if k != "cfg"}), indent=1))

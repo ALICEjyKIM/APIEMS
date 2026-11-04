@@ -16,8 +16,9 @@ class Cfg:
   T: int = 30
   reps: int = 30
   n_items: int = 15
-  n_sup: int = 24
-  # 시장 구조: 품목당 평균 대체 공급자 n_alt, 공급자 자리 품목 수의 편중도 conc, 품목별 대체 공급자 수 변동 het
+  n_sup: int = 60  # 공급자 자리 수 = n_items × n_alt: 자리마다 품목 하나 (Chu Theorem 5의 단일 품목 공급자, 기간별 진실성)
+  n_sup_multi: int = 24  # 다품목 비교 조건의 자리 수 (이전 PROC15H 시장, 자리당 평균 2.5품목)
+  # 시장 구조: 품목당 평균 대체 공급자 n_alt, 공급자 자리 품목 수의 편중도 conc(단일 품목이면 효과 없음), 품목별 대체 공급자 수 변동 het
   n_alt: int = 4
   conc: float = 0.5
   het: float = 0.5
@@ -93,4 +94,4 @@ class Cfg:
 
 
 # 시장 조건 (ref/design.md 7장): 기준 ×1에서 바꾸는 값
-SCALE = {"x1": dict(), "x2": dict(lam_buy=20.0, n_sup=48, n_alt=8), "x4": dict(lam_buy=40.0, n_sup=96, n_alt=16)}
+SCALE = {"x1": dict(), "x2": dict(lam_buy=20.0, n_sup=120, n_alt=8), "x4": dict(lam_buy=40.0, n_sup=240, n_alt=16)}
