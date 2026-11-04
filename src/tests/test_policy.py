@@ -2,6 +2,7 @@
 한 기간 최적은 추정 입찰가로 후보 m마다 청산한 플랫폼 몫을 직접 비교한 값과 같아야 한다.
 엔진은 기준 시장 반복 0을 짧게(T = 6) 돌린다.
 """
+import pickle
 from dataclasses import replace
 import numpy as np
 import pytest
@@ -10,7 +11,7 @@ from env.sim import Sim, run, cands
 from mech.chu import clear
 from policy.base import fixed, est, myopic
 from policy.qpol import qpol
-from value.feat import feats
+from value.feat import feats, plan
 
 CFG = replace(Cfg(), T=6)
 
@@ -76,6 +77,16 @@ def test_feats():
   assert [tuple(x[17:19]) for x in X] == cands(CFG)
   s.W, s.g = s.W * 3 + 1, s.g * 0.2
   assert np.array_equal(X, feats(CFG, s.pre()))
+
+
+# 예상 청산(plan)을 따로 저장해 pickle 왕복해도 같은 Q̂ 입력이 나온다 (원재료 저장, decisions.md "질문 3 비교 범위")
+def test_plan_raw():
+  s = Sim(CFG, 0)
+  s.step(1.0, 0.0)
+  o = s.pre()
+  o2, P = pickle.loads(pickle.dumps((o, plan(CFG, o))))
+  assert np.array_equal(feats(CFG, o), feats(CFG, o2, P))
+  assert all(p.p is None and p.R is None for p in P.values())
 
 
 # Q̂ 정책: 점수 최대 후보, 동점은 앞 후보, only로 제한, 기간 0은 고정 padding

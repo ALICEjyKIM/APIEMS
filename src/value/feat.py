@@ -2,6 +2,7 @@
 예상 청산은 policy.base.est의 추정 입찰가로 m마다 Chu IPB를 한 번 풀고, θ는 예상 재참여 보상액에만 쓴다.
 선형·MLP는 같은 입력을 받는다 (ref/design.md 5장, ref/decisions.md "Q̂ 입력").
 """
+from dataclasses import replace
 import numpy as np
 from env.sim import cands, hist, reward
 from mech.chu import clear
@@ -27,10 +28,15 @@ def ready(o):
   return not (np.isnan(o.vbar).all() or np.isnan(o.cbar).all())
 
 
-# 후보별 입력 행렬 (cands 순서): [상태, 후보·예상 청산, m × 상태, θ × 상태]
-def feats(cfg, o):
-  s, (W, g) = state(cfg, o), est(o)
-  P = {m: clear(cfg, o.q, W, o.K, g, m) for m in cfg.m_grid}
+# 예상 청산: 추정 입찰가로 후보 m마다 Chu IPB를 푼 결과 (가격·임계 가격·대금 배열은 빼서 저장 크기를 줄임)
+def plan(cfg, o):
+  W, g = est(o)
+  return {m: replace(clear(cfg, o.q, W, o.K, g, m), p=None, crit=None, R=None) for m in cfg.m_grid}
+
+
+# 후보별 입력 행렬 (cands 순서): [상태, 후보·예상 청산, m × 상태, θ × 상태]. P는 plan의 결과 (없으면 계산)
+def feats(cfg, o, P=None):
+  s, P = state(cfg, o), plan(cfg, o) if P is None else P
   wb, ws, cap = o.q @ o.base, o.K @ o.base, o.K.sum(0)
   rows = []
   for m, th in cands(cfg):
