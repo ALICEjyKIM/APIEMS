@@ -34,9 +34,9 @@ class QT:
   def __init__(self, qs, T, lo, hi):
     self.qs, self.T, self.lo, self.hi = qs, T, lo, hi
 
-  # 입력 행렬 → Â (그 기간의 Q̂_t, 목표 범위로 자름)
+  # 입력 행렬 → Â (그 기간의 Q̂_t, 목표 범위로 자름). GNN 입력 (행렬, 그래프 목록)도 받는다
   def __call__(self, X):
-    s = int(round(X[0, 0] * self.T))
+    s = int(round((X[0] if isinstance(X, tuple) else X)[0, 0] * self.T))
     return np.clip(self.qs[s](X), self.lo[s], self.hi[s])
 
 
