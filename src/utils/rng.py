@@ -4,7 +4,7 @@
 """
 import numpy as np
 
-STREAMS = {"inst": 0, "arr": 1, "noise": 2, "ret": 3, "explore": 6}
+STREAMS = {"inst": 0, "arr": 1, "noise": 2, "ret": 3, "explore": 6, "saa": 7}
 KINDS = {"buy": 0, "sup": 1}
 
 

@@ -15,6 +15,7 @@ class PreObs:
   """입찰 전 관측: 공개 정보와 지난 기간까지의 기록 (이번 기간 입찰가는 없다).
   주문자 행: bid 번호, q 수량, hb 이력, rb 기준점(nan = 거래 기록 없음), tb 재임, eb 지난 기간 padding 제외, W0 지난 신고 가치(nan = 신규).
   공급자 행(활동 자리 순): slot, sid 번호, K 용량, hs, rs, ts, es, g0 지난 신고 원가. pend·wait onboard 대기 용량·남은 기간, hi 품목 부족 이력, vbar·cbar 과거 품목 평균 단위 가치·원가(nan = 기록 없음), base 품목 기준가(공개), owe 미지급 재참여 보상.
+  uh 과거 주문자 단위 가치 비율(W / (q · base)) 전부, ch·ci 과거 공급 원가 전부와 그 품목 번호 (시나리오 예상 청산용 경험분포).
   """
   t: int
   bid: np.ndarray
@@ -39,6 +40,9 @@ class PreObs:
   cbar: np.ndarray
   base: np.ndarray
   owe: float
+  uh: np.ndarray = None
+  ch: np.ndarray = None
+  ci: np.ndarray = None
 
 
 # 참여자 하나의 상태: 원래 프로필, 이번 기간 주문·공급, 이력, 기준점, 재임, 지난 기간 padding 제외, 지난 신고가
@@ -76,6 +80,7 @@ class Sim:
     self.B, self.pipe, self.owe = {}, {}, {}
     self.S = {j: _new(j, s, cfg, np.full(nc, np.nan)) for j, s in enumerate(self.mk.sups)}
     self.hi, self.vs, self.vn, self.cs, self.cn = (np.zeros(nc) for _ in range(5))
+    self.uh, self.ch, self.ci = [], [], []
     self._arrive()
 
   # 기간 t 신규 주문자를 받고 이번 기간 행렬을 만든다 (주문자: 남은 주문자 다음 신규, 공급자: 자리 순)
@@ -101,7 +106,8 @@ class Sim:
                   self.slot.copy(), np.array([s["id"] for s in ss], int), self.K.copy(), a(ss, "h"), a(ss, "r"), a(ss, "ten"), a(ss, "ex"),
                   np.array([s["last"] for s in ss], float).reshape(-1, nc),
                   np.array([self.pipe[j][1].qty for j in pj], int).reshape(-1, nc), np.array([self.pipe[j][0] - self.t for j in pj], int),
-                  self.hi.copy(), vbar, cbar, self.mk.base.copy(), float(sum(self.owe.values())))
+                  self.hi.copy(), vbar, cbar, self.mk.base.copy(), float(sum(self.owe.values())),
+                  np.array(self.uh), np.array(self.ch), np.array(self.ci, int))
 
   # 이번 기간 입찰 (진실 입찰: 주문자 묶음 가치 W, 공급자 단위 원가 g)
   def bids(self):
@@ -146,13 +152,16 @@ class Sim:
         p["r"] = xk if np.isnan(p["r"]) else c.r_rho * p["r"] + (1 - c.r_rho) * xk
       p["ten"], p["ex"], p["last"] = p["ten"] + 1, bool(uk), np.asarray(lk, float)
 
-  # 품목 통계: 과거 평균 단위 가치(묶음 가치를 품목 기준가 비중으로 나눔, W base_c / (q · base)), 과거 평균 원가, 공급 부족 이력
+  # 품목 통계: 과거 평균 단위 가치(묶음 가치를 품목 기준가 비중으로 나눔, W base_c / (q · base)), 과거 평균 원가, 공급 부족 이력, 경험분포(uh, ch)
   def _stats(self, q, W, K, g):
     has, sup, base = q > 0, K > 0, self.mk.base
-    self.vs += (has * (W / (q @ base))[:, None] * base).sum(0)
+    u = W / (q @ base)
+    self.vs += (has * u[:, None] * base).sum(0)
     self.vn += has.sum(0)
     self.cs += (g * sup).sum(0)
     self.cn += sup.sum(0)
+    j, c = np.nonzero(sup)
+    self.uh, self.ch, self.ci = self.uh + list(u), self.ch + list(g[j, c]), self.ci + list(c)
     dem, cap = q.sum(0), K.sum(0)
     short = np.where(dem > 0, np.maximum(dem - cap, 0) / np.maximum(dem, 1), 0.0)
     self.hi = self.cfg.h_rho * self.hi + (1 - self.cfg.h_rho) * short

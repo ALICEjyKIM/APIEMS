@@ -1,10 +1,11 @@
-"""1단계 비교 정책: 고정 padding·최선 고정값(fixed), 한 기간 최적(myopic)과 예상 청산에 쓰는 추정 입찰가(est).
+"""1단계 비교 정책: 고정 padding·최선 고정값(fixed), 한 기간 최적(myopic)과 예상 청산에 쓰는 추정 입찰가(est), 시나리오 입찰가(scen)와 시나리오 한 기간 최적(saa).
 모든 정책은 PreObs만 받아 같은 후보 집합(env.sim.cands)에서 (m, θ)를 고른다. 이번 기간 입찰가는 읽지 않는다.
-예상 청산은 추정 입찰가로 Chu IPB(mech.chu.clear)를 그대로 푼다 (ref/design.md 5·6장).
+예상 청산은 추정 입찰가로 Chu IPB(mech.chu.clear)를 그대로 푼다 (ref/design.md 5·6장, ref/decisions.md "예측 점검").
 """
 import numpy as np
 from env.sim import cands
 from mech.chu import clear
+from utils.rng import rng
 
 
 # 늘 같은 (m, θ)를 고르는 정책
@@ -26,5 +27,35 @@ def myopic(cfg):
     W, g = est(o)
     ms = sorted({m for m, _ in cands(cfg)})
     G = [clear(cfg, o.q, W, o.K, g, m).G for m in ms]
+    return ms[int(np.argmax(G))], 0.0
+  return pol
+
+
+# 시나리오 입찰가 K개 (경험분포 복원추출): 주문자 Ŵ_b = u × (q_b · base), u ~ uh. 공급자 ĝ_jc ~ 품목 c의 과거 원가 (표본 < saa_min이면 전체 원가 비율 × base_c). 난수는 (t, 주문자 수, 자리 수)로 고정
+def scen(cfg, o, K):
+  r, wb, pool = rng(cfg, 0, "saa", o.t, len(o.bid), len(o.slot)), o.q @ o.base, o.ch / o.base[o.ci]
+  src = [o.ch[o.ci == c] if (o.ci == c).sum() >= cfg.saa_min else pool * o.base[c] for c in range(cfg.n_items)]
+  out = []
+  for _ in range(K):
+    g = np.zeros(o.K.shape)
+    for c, j in enumerate(o.K.T > 0):
+      g[j, c] = r.choice(src[c], j.sum())
+    out.append((r.choice(o.uh, len(o.bid)) * wb, g))
+  return out
+
+
+# 참고용 시나리오: 재참여자는 지난 신고가(W0, g0)를 그대로 쓰고 신규만 시나리오 (개인 신고가를 쓰므로 정책에는 쓰지 않음)
+def scen_ind(cfg, o, K):
+  return [(np.where(np.isnan(o.W0), W, o.W0), np.where(np.isnan(o.g0) | (o.K == 0), g, o.g0)) for W, g in scen(cfg, o, K)]
+
+
+# 시나리오 한 기간 최적: 후보 m마다 시나리오 K개 청산의 플랫폼 몫 평균이 가장 큰 m (동점이면 작은 m), θ = 0. 기록이 없으면 고정 padding
+def saa(cfg, K=None):
+  K = K or cfg.saa_k
+  def pol(o):
+    if not len(o.uh):
+      return 1.0, 0.0
+    ms, S = sorted({m for m, _ in cands(cfg)}), scen(cfg, o, K)
+    G = [np.mean([clear(cfg, o.q, W, o.K, g, m).G for W, g in S]) for m in ms]
     return ms[int(np.argmax(G))], 0.0
   return pol
