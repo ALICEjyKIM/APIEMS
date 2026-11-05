@@ -73,8 +73,12 @@ def summ(rows):
 def main():
   sc = sys.argv[1] if sys.argv[1:] else "x1"
   cfg = replace(Cfg(), **SCALE[sc])
+  rows = []
   with Pool(cfg.n_proc) as p:
-    rows = p.map(one, [(cfg, r, t) for r in REPS for t in range(T0, cfg.T)], chunksize=1)
+    for x in p.imap_unordered(one, [(cfg, r, t) for r in REPS for t in range(T0, cfg.T)]):
+      rows.append(x)
+      print(len(rows), x["rep"], x["t"], flush=True)
+  rows.sort(key=lambda x: (x["rep"], x["t"]))
   out = summ(rows)
   json.dump(dict(cfg=repr(cfg), scale=sc, K=K, **out, rows=rows), open(f"result/runs/check_dev{'' if sc == 'x1' else '_' + sc}.json", "w"), indent=1)
   print(json.dumps(out, indent=1))
