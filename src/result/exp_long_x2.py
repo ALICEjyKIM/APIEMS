@@ -1,6 +1,6 @@
 """×2 장기 표 규칙 실험 (ref/decisions.md "×2 장기 표 규칙 실험"): 평가 반복 0~29에서 고정 padding, 한 기간 최적(평균 · 시나리오), 장기 표 규칙(평균 · 시나리오)을 같은 공통 난수로 30기간 돌린다.
 이후 손실 표 Lbar는 한 번 올린 대가 점검 ×2(check_dev_x2.json, 반복 1000~1009)에서 시점 구간별 · m별 평균 L = D − I로 만든다. 평가 반복과 겹치지 않는다.
-결과 result/runs/exp_long_x2[_정책들].json. 실행: src/에서 python -m result.exp_long_x2 [정책 이름 ...] (없으면 다섯 개 모두, 무거운 시나리오 정책을 따로 돌릴 때 나눠 쓴다)
+결과 result/runs/exp_long_{규모}[_정책들].json. 실행: src/에서 python -m result.exp_long_x2 [규모] [정책 이름 ...] (규모 기본 x2, 정책 없으면 다섯 개 모두. 표 규칙은 x2에서만)
 """
 from dataclasses import replace
 import json
@@ -46,8 +46,11 @@ def pd(x, y):
 
 
 def main():
-  cfg, names = replace(Cfg(), **SCALE["x2"]), tuple(sys.argv[1:]) or NAMES
-  L, rows = lbar("result/runs/check_dev_x2.json"), []
+  sc = sys.argv[1] if sys.argv[1:2] and sys.argv[1] in SCALE else "x2"
+  cfg, names = replace(Cfg(), **SCALE[sc]), tuple(a for a in sys.argv[1:] if a not in SCALE) or NAMES
+  tab = any(n.startswith("table") for n in names)
+  assert sc == "x2" or not tab  # 이후 손실 표는 ×2 점검에서 만든 값
+  L, rows = lbar("result/runs/check_dev_x2.json") if tab else None, []
   with Pool(cfg.n_proc) as p:
     for x in p.imap_unordered(one, [(cfg, r, n, L) for n in names for r in range(cfg.reps)]):
       rows.append(x)
@@ -64,7 +67,7 @@ def main():
     if "fixed" in P:
       summ[n]["early_vs_fixed"], summ[n]["late_vs_fixed"] = pd(P[n][:, :e].sum(1), P["fixed"][:, :e].sum(1)), pd(P[n][:, e:].sum(1), P["fixed"][:, e:].sum(1))
   tag = "" if names == NAMES else "_" + "_".join(names)
-  json.dump(dict(cfg=repr(cfg), Lbar=L, bins=BINS, summary=summ, rows=rows), open(f"result/runs/exp_long_x2{tag}.json", "w"), indent=1)
+  json.dump(dict(cfg=repr(cfg), Lbar=L, bins=BINS, summary=summ, rows=rows), open(f"result/runs/exp_long_{sc}{tag}.json", "w"), indent=1)
   print(json.dumps(dict(Lbar=L, summary=summ), indent=1))
 
 

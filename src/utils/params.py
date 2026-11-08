@@ -96,5 +96,5 @@ class Cfg:
   tol: float = 1e-6
 
 
-# 시장 조건 (ref/design.md 7장): 기준 ×1에서 바꾸는 값
-SCALE = {"x1": dict(), "x2": dict(lam_buy=20.0, n_sup=120, n_alt=8), "x4": dict(lam_buy=40.0, n_sup=240, n_alt=16)}
+# 시장 조건 (ref/design.md 7장): 기준 ×1에서 바꾸는 값. x2d는 ×2 수요에 ×1 대체 공급자 수 (규모와 대체 공급자 떼기, 품목 용량은 수요를 따라 2배)
+SCALE = {"x1": dict(), "x2": dict(lam_buy=20.0, n_sup=120, n_alt=8), "x4": dict(lam_buy=40.0, n_sup=240, n_alt=16), "x2d": dict(lam_buy=20.0)}
