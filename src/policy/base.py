@@ -49,6 +49,27 @@ def scen_ind(cfg, o, K):
   return [(np.where(np.isnan(o.W0), W, o.W0), np.where(np.isnan(o.g0) | (o.K == 0), g, o.g0)) for W, g in scen(cfg, o, K)]
 
 
+# 후보 m별 예상 이번 기간 플랫폼 몫: 평균 추정 입찰가(mean) 또는 시나리오 K개 평균(saa)
+def gains(cfg, o, ms, kind, K=None):
+  if kind == "mean":
+    W, g = est(o)
+    return np.array([clear(cfg, o.q, W, o.K, g, m).G for m in ms])
+  S = scen(cfg, o, K or cfg.saa_k)
+  return np.array([np.mean([clear(cfg, o.q, W, o.K, g, m).G for W, g in S]) for m in ms])
+
+
+# 장기 표 규칙 (ref/decisions.md "×2 장기 표 규칙 실험"): 예상 이번 기간 이득 + 시점 구간별 평균 이후 손실 Lbar[구간][m]이 가장 큰 m, θ = 0. 구간 경계 bins는 기간 t의 왼쪽 끝. 기록이 없으면 고정 padding
+def table(cfg, Lbar, bins, kind="saa"):
+  def pol(o):
+    if not len(o.uh) or np.isnan(o.vbar).all() or np.isnan(o.cbar).all():
+      return 1.0, 0.0
+    ms = sorted({m for m, _ in cands(cfg)})
+    G = gains(cfg, o, ms, kind)
+    v = G - G[0] + np.asarray(Lbar[max(np.searchsorted(bins, o.t, side="right") - 1, 0)])
+    return ms[int(np.argmax(v))], 0.0
+  return pol
+
+
 # 시나리오 한 기간 최적: 후보 m마다 시나리오 K개 청산의 플랫폼 몫 평균이 가장 큰 m (동점이면 작은 m), θ = 0. 기록이 없으면 고정 padding
 def saa(cfg, K=None):
   K = K or cfg.saa_k

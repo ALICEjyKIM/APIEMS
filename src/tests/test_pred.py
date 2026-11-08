@@ -8,7 +8,8 @@ import pytest
 from utils.params import Cfg
 from env.sim import Sim
 from mech.chu import clear
-from policy.base import scen, scen_ind, saa
+from policy.base import scen, scen_ind, saa, table, gains
+from env.sim import cands
 
 CFG = replace(Cfg(), T=6, saa_k=4)
 
@@ -58,3 +59,22 @@ def test_saa():
   assert th == 0.0 and m == CFG.m_grid[int(np.argmax(G))]
   s.W, s.g = s.W * 3 + 1, s.g * 0.2
   assert pol(s.pre()) == (m, th)
+
+
+# 장기 표 규칙: 기간 0은 고정, 이후 손실 표가 0이면 시나리오 한 기간 최적과 같은 선택, 큰 m에 큰 손실을 주면 작은 m을 고르고, 입찰가를 바꿔도 같은 선택
+def test_table():
+  s = Sim(CFG, 0)
+  ms = sorted({m for m, _ in cands(CFG)})
+  z = [[0.0] * len(ms)]
+  assert table(CFG, z, [0])(s.pre()) == (1.0, 0.0)
+  for _ in range(3):
+    s.step(1.0, 0.0)
+  o = s.pre()
+  assert table(CFG, z, [0])(o) == saa(CFG)(o)
+  big = [[0.0] + [-1e9] * (len(ms) - 1)]
+  assert table(CFG, big, [0])(o) == (1.0, 0.0)
+  G = gains(CFG, o, ms, "mean")
+  assert table(CFG, z, [0], "mean")(o) == (ms[int(np.argmax(G - G[0]))], 0.0)
+  m = table(CFG, z, [0])(o)
+  s.W, s.g = s.W * 3 + 1, s.g * 0.2
+  assert table(CFG, z, [0])(s.pre()) == m
