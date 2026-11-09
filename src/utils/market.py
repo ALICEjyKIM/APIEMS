@@ -132,9 +132,9 @@ def make(cfg, rep):
   return mk
 
 
-# 자리 j가 기간 t에 비면 생기는 대체 후보: 품목 deg[j]개를 자격 가중치로 비복원 추출, 용량·원가는 새로 생성
-def candidate(cfg, mk, rep, t, j):
-  g = rng(cfg, rep, "arr", 2, t, j)
+# 자리 j가 기간 t에 비면 생기는 대체 후보 (sub = 3이면 t는 자리의 교체 순번): 품목 deg[j]개를 자격 가중치로 비복원 추출, 용량·원가는 새로 생성
+def candidate(cfg, mk, rep, t, j, sub=2):
+  g = rng(cfg, rep, "arr", sub, t, j)
   it = np.zeros(cfg.n_items, bool)
   it[g.choice(cfg.n_items, mk.deg[j], replace=False, p=mk.w)] = True
   return profile(cfg, mk, g, it)

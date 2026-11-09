@@ -77,7 +77,7 @@ class Sim:
     nc = cfg.n_items
     self.cfg, self.rep, self.t, self.nb = cfg, rep, 0, 0
     self.mk, self.ret = market.make(cfg, rep), Ret(cfg)
-    self.B, self.pipe, self.owe = {}, {}, {}
+    self.B, self.pipe, self.owe, self.nrep = {}, {}, {}, np.zeros(cfg.n_sup, int)
     self.S = {j: _new(j, s, cfg, np.full(nc, np.nan)) for j, s in enumerate(self.mk.sups)}
     self.hi, self.vs, self.vn, self.cs, self.cn = (np.zeros(nc) for _ in range(5))
     self.uh, self.ch, self.ci = [], [], []
@@ -173,14 +173,18 @@ class Sim:
     for j, z in zip(self.slot, zs):
       if not z:
         del self.S[j]
-        self.pipe[j] = (t + cfg.onboard, market.candidate(cfg, self.mk, rep, t, j))
+        self.nrep[j] += 1
+        n = int(self.nrep[j])
+        c = market.candidate(cfg, self.mk, rep, t, j) if cfg.rep_key == "time" else market.candidate(cfg, self.mk, rep, n, j, 3)
+        self.pipe[j] = (t + cfg.onboard, c, None if cfg.rep_key == "time" else n * cfg.n_sup + j)
     self.t = t + 1
     for p in self.B.values():
       p["cur"] = market.perturb(cfg, rep, "buy", p["id"], self.t, p["prof"])
     for p in self.S.values():
       p["cur"] = market.perturb(cfg, rep, "sup", p["id"], self.t, p["prof"])
     for j in [j for j in sorted(self.pipe) if self.pipe[j][0] <= self.t]:
-      self.S[j] = _new(self.t * cfg.n_sup + j, self.pipe.pop(j)[1], cfg, np.full(cfg.n_items, np.nan))
+      _, c, pid = self.pipe.pop(j)
+      self.S[j] = _new(self.t * cfg.n_sup + j if pid is None else pid, c, cfg, np.full(cfg.n_items, np.nan))
     self.S = dict(sorted(self.S.items()))
     self._arrive()
 

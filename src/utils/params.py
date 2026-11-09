@@ -27,6 +27,7 @@ class Cfg:
   dir_alpha: float = 5.0  # 품목 용량을 공급자에게 나누는 Gamma 형태 (클수록 고르게)
   cover: float = 1.3  # 실효 공급 / 명목 수요 (기준 자리 점유율로 나눠 명목 용량을 정한다)
   onboard: int = 2  # 떠난 공급자 자리를 새 후보가 채우기까지의 기간
+  rep_key: str = "time"  # 대체 후보 난수의 키: time = (떠난 기간, 자리), slot = (자리의 교체 순번, 자리). 후보 분포는 같고 정책 사이 공통 난수만 다르다 (ref/decisions.md "공급자 교체 난수 점검")
   # 주문자
   lam_buy: float = 10.0  # 기간당 신규 주문자 평균 (Poisson)
   ret_ss: float = 0.5  # 명목 수요 계산용 명목 재참여율 (명목 활동 주문자 = lam_buy / (1 − ret_ss))

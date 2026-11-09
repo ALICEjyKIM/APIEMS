@@ -1,7 +1,8 @@
-"""기간 엔진 테스트: 재참여 확률표, 입찰가 불변, 공통 난수, 재참여 보상 장부, 잉여율, 이력·기준점 갱신, onboard.
+"""기간 엔진 테스트: 재참여 확률표, 입찰가 불변, 공통 난수, 재참여 보상 장부, 잉여율, 이력·기준점 갱신, onboard, 교체 순번 키.
 재참여 확률은 세 점과 기준점·제외 항의 정의를 손으로 계산한 값과 비교한다.
 엔진 테스트는 기준 시장 반복 0을 짧게(T = 6) 돌린다.
 """
+from copy import deepcopy
 from dataclasses import replace, fields
 import numpy as np
 import pytest
@@ -117,3 +118,18 @@ def test_onboard():
           assert R[t]["sid"][k] == t * CFG.n_sup + j
           n += 1
   assert n > 0
+
+
+# 교체 순번 키(rep_key = slot): 자리가 언제 비든 그 자리의 첫 후보는 같은 번호 n_sup + j와 같은 프로필
+def test_slot_key_replacement():
+  cfg = replace(CFG, rep_key="slot")
+  keep = lambda x, j=None: (np.ones(len(x.bid), bool), np.array([k != j for k in x.slot]))
+  a, b = deepcopy(Sim(cfg, 0)), deepcopy(Sim(cfg, 0))
+  a._next(*keep(a, 0))
+  b._next(*keep(b))
+  b._next(*keep(b, 0))
+  for x in (a, b):
+    while 0 not in x.S:
+      x._next(*keep(x))
+  assert a.S[0]["id"] == b.S[0]["id"] == cfg.n_sup
+  assert np.array_equal(a.S[0]["prof"].qty, b.S[0]["prof"].qty) and np.allclose(a.S[0]["prof"].price, b.S[0]["prof"].price)
