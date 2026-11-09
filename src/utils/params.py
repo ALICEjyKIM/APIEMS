@@ -15,6 +15,7 @@ class Cfg:
   seed: int = 0
   T: int = 30
   reps: int = 30
+  rep0: int = 0  # 평가 반복 시작 번호 (평가 반복 rep0 ~ rep0 + reps − 1)
   n_items: int = 15
   n_sup: int = 60  # 공급자 자리 수 = n_items × n_alt: 자리마다 품목 하나 (Chu Theorem 5의 단일 품목 공급자, 기간별 진실성)
   n_sup_multi: int = 24  # 다품목 비교 조건의 자리 수 (이전 PROC15H 시장, 자리당 평균 2.5품목)
