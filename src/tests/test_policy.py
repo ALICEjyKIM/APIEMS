@@ -9,7 +9,7 @@ import pytest
 from utils.params import Cfg
 from env.sim import Sim, run, cands
 from mech.chu import clear
-from policy.base import fixed, est, myopic
+from policy.base import fixed, est, myopic, table
 from policy.qpol import qpol, build
 from value.feat import feats, plan
 
@@ -56,6 +56,17 @@ def test_myopic():
   # 1단계는 입찰가를 읽지 않는다: 이번 기간 입찰가만 바꿔도 선택이 같다
   s.W, s.g = s.W * 3 + 1, s.g * 0.2
   assert pol(s.pre()) == (m, th)
+
+
+# 표 규칙의 구간은 남은 기간 기준: t = 3이 T = 30에서는 첫 구간, T = 10에서는 남은 7기간인 [20, 25) 구간, T = 100에서는 첫 구간
+def test_table_horizon():
+  s = Sim(CFG, 0)
+  for _ in range(3):
+    s.step(1.0, 0.0)
+  o, big = s.pre(), 1e6
+  L = [[0, big, -big, -big], [0, -big, -big, -big], [0, -big, -big, -big], [0, -big, -big, big], [0, -big, big, -big]]
+  pick = lambda T: table(replace(CFG, T=T), L, (0, 10, 15, 20, 25), "mean")(o)
+  assert o.t == 3 and pick(30) == (1.1, 0.0) and pick(10) == (1.5, 0.0) and pick(100) == (1.1, 0.0)
 
 
 # 공통 난수 rollout: 정책이 달라도 기간마다 같은 신규 주문자가 오고, 같은 정책은 같은 경로를 낸다
