@@ -5,6 +5,7 @@
 from dataclasses import replace
 import json
 from multiprocessing import Pool
+import os
 import re
 import sys
 import numpy as np
@@ -72,10 +73,14 @@ def main():
   tab = any(n.startswith("table") for n in names)
   assert sc == "x2" or not tab  # 이후 손실 표는 ×2 점검에서 만든 값
   L, rows = lbar(sorted({m for m, _ in cands(cfg)}), (DEV,) + ((dev,) if dev else ())) if tab else None, []
+  tag = ("" if names == NAMES else "_" + "_".join(names)) + "".join(f"_{k}{v}" for k, v in ov.items() if k not in ("rep0", "reps", "n_proc")) + (f"_r{cfg.rep0}-{cfg.rep0 + cfg.reps - 1}" if cfg.rep0 else "")
+  out = f"result/runs/exp_long_{sc}{tag}"
+  # 시장 순서로 넣고 실행 하나가 끝날 때마다 중간 저장: 끝까지 못 가도 끝난 시장은 모든 정책이 함께 남는다
   with Pool(cfg.n_proc) as p:
-    for x in p.imap_unordered(one, [(cfg, r, n, L) for n in names for r in range(cfg.rep0, cfg.rep0 + cfg.reps)]):
+    for x in p.imap_unordered(one, [(cfg, r, n, L) for r in range(cfg.rep0, cfg.rep0 + cfg.reps) for n in names]):
       rows.append(x)
       print(len(rows), x["name"], x["rep"], flush=True)
+      json.dump(dict(cfg=repr(cfg), dev=dev, Lbar=L, bins=BINS, rows=rows), open(out + ".part.json", "w"))
   rows.sort(key=lambda x: (names.index(x["name"]), x["rep"]))
   P = {n: np.array([x["Pi"] for x in rows if x["name"] == n]) for n in names}
   M = {n: np.array([x["m"] for x in rows if x["name"] == n]) for n in names}
@@ -87,8 +92,8 @@ def main():
         summ[n]["vs_" + b] = pd(P[n].sum(1), P[b].sum(1))
     if "fixed" in P:
       summ[n]["early_vs_fixed"], summ[n]["late_vs_fixed"] = pd(P[n][:, :e].sum(1), P["fixed"][:, :e].sum(1)), pd(P[n][:, e:].sum(1), P["fixed"][:, e:].sum(1))
-  tag = ("" if names == NAMES else "_" + "_".join(names)) + "".join(f"_{k}{v}" for k, v in ov.items() if k not in ("rep0", "reps", "n_proc")) + (f"_r{cfg.rep0}-{cfg.rep0 + cfg.reps - 1}" if cfg.rep0 else "")
-  json.dump(dict(cfg=repr(cfg), dev=dev, Lbar=L, bins=BINS, summary=summ, rows=rows), open(f"result/runs/exp_long_{sc}{tag}.json", "w"), indent=1)
+  json.dump(dict(cfg=repr(cfg), dev=dev, Lbar=L, bins=BINS, summary=summ, rows=rows), open(out + ".json", "w"), indent=1)
+  os.remove(out + ".part.json")
   print(json.dumps(dict(Lbar=L, summary=summ), indent=1))
 
 

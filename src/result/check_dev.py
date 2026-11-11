@@ -26,9 +26,10 @@ def one(args):
   while s.t < t:
     s.step(1.0, 0.0)
   o, ms = s.pre(), list(cfg.m_grid)
+  full = cfg.m_grid[0] == 1.0  # 예상 이득은 m = 1 대비 요약에만 쓰므로 새 m만 잴 때는 건너뛴다 (청산은 상태를 바꾸지 않아 미래 경로는 같다)
   We, ge = est(o)
-  Gm = [clear(cfg, o.q, We, o.K, ge, m).G for m in ms]
-  Gs = np.array([[clear(cfg, o.q, W, o.K, g, m).G for m in ms] for W, g in scen(cfg, o, cfg.saa_k)]).mean(0)
+  Gm = [clear(cfg, o.q, We, o.K, ge, m).G for m in ms] if full else []
+  Gs = np.array([[clear(cfg, o.q, W, o.K, g, m).G for m in ms] for W, g in scen(cfg, o, cfg.saa_k)]).mean(0) if full else np.zeros(0)
   R, I = np.zeros((nk, len(ms))), np.zeros(len(ms))
   for k in range(nk):
     for i, m in enumerate(ms):
