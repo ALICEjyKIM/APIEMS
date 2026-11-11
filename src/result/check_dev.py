@@ -5,6 +5,7 @@
 from copy import deepcopy
 from dataclasses import replace
 import json
+import os
 from multiprocessing import Pool
 import sys
 import numpy as np
@@ -14,7 +15,7 @@ from mech.chu import clear
 from policy.base import est, scen
 from result.check_pred import REPS, T0
 from result.headroom import fut, K
-from result.exp_long_x2 import ovr
+from result.exp_long_x2 import ovr, save, part
 
 TAUS = (0, 5, 10, 15, 20, 30, 40, 50)
 
@@ -76,15 +77,21 @@ def main():
   sc = sys.argv[1] if sys.argv[1:2] and sys.argv[1] in SCALE else "x1"
   ov = dict(a.split("=") for a in sys.argv[1:] if "=" in a)
   nk = int(ov.pop("K", K))
-  cfg, rows = ovr(replace(Cfg(), **SCALE[sc]), ov), []
+  cfg = ovr(replace(Cfg(), **SCALE[sc]), ov)
+  tag = ("" if sc == "x1" else "_" + sc) + "".join(f"_{k}{v}" for k, v in ov.items()) + (f"_K{nk}" if nk != K else "")
+  pth = f"result/runs/check_dev{tag}"
+  # 상태 하나가 끝날 때마다 중간 저장, 같은 명령으로 다시 실행하면 저장된 상태는 건너뛴다 (미래 수는 파일 이름에 들어 있다)
+  rows = part(pth + ".part.json", cfg)
+  done = {(x["rep"], x["t"]) for x in rows}
   with Pool(cfg.n_proc) as p:
-    for x in p.imap_unordered(one, [(cfg, r, t, nk) for r in REPS for t in range(T0, cfg.T)]):
+    for x in p.imap_unordered(one, [(cfg, r, t, nk) for r in REPS for t in range(T0, cfg.T) if (r, t) not in done]):
       rows.append(x)
       print(len(rows), x["rep"], x["t"], flush=True)
+      save(pth + ".part.json", dict(cfg=repr(cfg), K=nk, rows=rows))
   rows.sort(key=lambda x: (x["rep"], x["t"]))
   out = summ(rows) if cfg.m_grid[0] == 1.0 else {}
-  tag = ("" if sc == "x1" else "_" + sc) + "".join(f"_{k}{v}" for k, v in ov.items()) + (f"_K{nk}" if nk != K else "")
-  json.dump(dict(cfg=repr(cfg), scale=sc, K=nk, **out, rows=rows), open(f"result/runs/check_dev{tag}.json", "w"), indent=1)
+  json.dump(dict(cfg=repr(cfg), scale=sc, K=nk, **out, rows=rows), open(pth + ".json", "w"), indent=1)
+  os.remove(pth + ".part.json")
   print(json.dumps(out, indent=1))
 
 

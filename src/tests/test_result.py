@@ -1,11 +1,12 @@
-"""실험 스크립트 보조 함수 테스트: Cfg 키=값 덮어쓰기와 이후 손실 표 합치기.
+"""실험 스크립트 보조 함수 테스트: Cfg 키=값 덮어쓰기, 이후 손실 표 합치기, 중간 저장 이어 쓰기.
 이후 손실 표는 m = 1 파일과 다른 m만 잰 파일을 같은 상태 · 같은 미래끼리 짝지어 합친다.
 가짜 점검 파일 두 개로 손으로 계산한 값과 비교한다.
 """
 import json
+import pytest
 from dataclasses import replace
 from utils.params import Cfg
-from result.exp_long_x2 import ovr, lbar
+from result.exp_long_x2 import ovr, lbar, save, part
 
 TS = (5, 12, 17, 22, 27)
 
@@ -25,3 +26,14 @@ def test_lbar_merge(tmp_path):
   json.dump(dict(cfg=repr(replace(Cfg(), m_grid=(1.05,))), rows=B), open(pb, "w"))
   assert lbar((1.0, 1.1), (pa,)) == [[0, 2 * s - 1] for s in range(5)]
   assert lbar((1.0, 1.05, 1.1), (pa, pb)) == [[0, 5 * s - 2, 2 * s - 1] for s in range(5)]
+
+
+# 중간 저장: 저장한 기록이 그대로 돌아오고, 파일이 없으면 빈 목록, 설정이 다르면 멈춘다
+def test_part(tmp_path):
+  p, c = str(tmp_path / "a.part.json"), Cfg()
+  assert part(p, c) == []
+  rows = [dict(name="fixed", rep=3, Pi=[0.1, 1 / 3])]
+  save(p, dict(cfg=repr(c), rows=rows))
+  assert part(p, c) == rows
+  with pytest.raises(AssertionError):
+    part(p, replace(c, T=10))
