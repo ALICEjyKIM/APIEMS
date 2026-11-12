@@ -1,8 +1,9 @@
 """질문 3 학습 (TD): 원재료(result.collect_raw)로 선형·MLP·MLP + 구조 요약·GNN을 같은 자료, 같은 탐색 예산 8개씩으로 기간 T−1부터 1까지 거꾸로 학습한다.
 목표·조기 종료·선택 기준은 train_td와 같다 (ref/decisions.md "TD 학습 (2차)", "질문 3 비교 범위"). 평가는 adv 원재료 전체 상태에서 고른 후보의 실제 A 평균, regret, 최선 적중률, 후보 순위 상관, RMSE.
-결과 result/runs/train_q3.json, 모형 result/data/qhat_q3.pkl. 실행: src/에서 python -m result.train_q3 [작업자 수]
+결과 result/runs/train_q3.json, 모형 result/data/qhat_q3.pkl. 실행: src/에서 python -m result.train_q3 [작업자 수] (설정마다 result/data/q3_part에 저장, 다시 실행하면 저장된 설정은 건너뜀)
 """
 import json
+import os
 import pickle
 import sys
 import time
@@ -16,6 +17,7 @@ from value.raw import load_adv, load_td
 
 METHODS = ("lin", "mlp", "mlps", "gnn")
 DATA = {}
+PART = "result/data/q3_part"
 
 
 # 방법별 입력: 표(lin, mlp), 표 + 구조 요약(mlps), (표, 그래프 목록)(gnn). 상태 단위 배열 → 행 단위
@@ -121,10 +123,23 @@ def fit_one(args):
   return row, q
 
 
+# 설정 번호 i를 학습하고 중간 저장 파일에 쓴다
+def fit_part(args):
+  i, a = args
+  out = fit_one(a)
+  pickle.dump(out, open(f"{PART}/{i}.pkl", "wb"))
+  return i
+
+
 def main():
   cfg, n = Cfg(), int(sys.argv[1]) if len(sys.argv) > 1 else 8
-  with Pool(n, initializer=init, initargs=(cfg, max(1, cfg.n_proc // n))) as p:
-    out = p.map(fit_one, grid(cfg), chunksize=1)
+  g = grid(cfg)
+  os.makedirs(PART, exist_ok=True)
+  todo = [(i, a) for i, a in enumerate(g) if not os.path.exists(f"{PART}/{i}.pkl")]  # shortcut: Cfg나 원재료가 바뀌면 q3_part를 비우고 다시 실행
+  if todo:
+    with Pool(n, initializer=init, initargs=(cfg, max(1, cfg.n_proc // n))) as p:
+      list(p.imap_unordered(fit_part, todo, chunksize=1))
+  out = [pickle.load(open(f"{PART}/{i}.pkl", "rb")) for i in range(len(g))]
   init(cfg, cfg.n_proc)
   A, sub = DATA["A"], DATA["sub"]
   Gm = np.where(A["X"][:, :, 18] == 0, A["X"][:, :, 20], -np.inf)
