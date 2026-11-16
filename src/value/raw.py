@@ -1,4 +1,4 @@
-"""원재료(result.collect_raw) → 근사 방법별 학습 입력. 표 입력(value.feat.feats), 표 + 구조 요약(value.graph.feats_s), 그래프(value.graph.graph)를 한 번에 만든다.
+"""원재료(result.train.fit_q3 collect) → 근사 방법별 학습 입력. 표 입력(value.feat.feats), 표 + 구조 요약(value.graph.feats_s), 그래프(value.graph.graph)를 한 번에 만든다.
 adv: X, Xs, G, Y(고정 padding 대비 남은 누적 이윤 차이), rep, t, R0. td: X, Xs, G, P, Xn, Xsn, Gn, t, rep (마지막 기간의 다음 상태는 0 입력·빈 그래프 대신 None 표시).
 근사 방법은 같은 상태·같은 반복을 받고 입력 형태만 다르다 (ref/decisions.md "질문 3 비교 범위").
 """

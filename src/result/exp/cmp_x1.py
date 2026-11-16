@@ -1,6 +1,6 @@
 """×1 이후 손실 추정 방법 비교 (ref/decisions.md 2026-11-13 "×1 이후 손실 추정 방법 비교"): MC 평균표 · MLP · GNN을 같은 상태 · 같은 후보(θ = 0)로 비교한다.
 pred: adv 원재료 상태의 예측 지표(R², RMSE, 순위 상관, 최선 적중, regret, 고른 후보의 실제 A), ev: 평가 반복 0~29의 30기간 누적 이윤(같은 공통 난수).
-결과 result/runs/cmp_x1_pred.json, cmp_x1_ev.json. 실행: src/에서 train_q3 다음 python -m result.cmp_x1 pred, python -m result.cmp_x1 ev
+결과 result/runs/cmp_x1_pred.json, cmp_x1_ev.json. 실행: src/에서 python -m result.train.fit_q3 train 다음 python -m result.exp.cmp_x1 pred, python -m result.exp.cmp_x1 ev
 """
 import json
 import pickle
@@ -13,11 +13,8 @@ from utils.params import Cfg
 from env.sim import run, cands
 from policy.base import fixed, table
 from policy.qpol import qpol
-from result.main1 import rec
-from result.train_q3 import predict
-from result.exp_long_x2 import BINS, lbar
-from result.check_dev_ci import cci
-from result.check_state import jack
+from result.common import rec, BINS, lbar, cci, jack
+from result.train.fit_q3 import predict
 from value.raw import load_adv
 
 DEV1 = "result/runs/check_dev.json"

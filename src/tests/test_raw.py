@@ -1,6 +1,6 @@
 """원재료 수집·변환 테스트: 저장한 원재료에서 만든 표 입력이 온라인 feats와 같고, td의 Π와 adv의 목표가 직접 돌린 값과 같은지.
 기준 시장 반복 2000을 T = 4로 짧게 돌려 임시 폴더에 저장한다.
-Pool은 쓰지 않고 one을 직접 부른다.
+Pool은 쓰지 않고 result.train.fit_q3.collect_one을 직접 부른다.
 """
 import gzip
 import os
@@ -13,8 +13,8 @@ from utils.params import Cfg
 from env.sim import Sim, cands
 from value.feat import feats
 from value.raw import load_adv, load_td
-from result import collect_raw
-from result.collect import behave
+from result.train import fit_q3
+from result.common import behave
 
 CFG = replace(Cfg(), T=4)
 
@@ -22,10 +22,10 @@ CFG = replace(Cfg(), T=4)
 # 임시 폴더에 adv·td 원재료를 하나씩 만든다
 @pytest.fixture
 def raw(tmp_path, monkeypatch):
-  monkeypatch.setattr(collect_raw, "DIR", str(tmp_path))
+  monkeypatch.setattr(fit_q3, "DIR", str(tmp_path))
   for mode in ("adv", "td"):
     os.makedirs(f"{tmp_path}/{mode}")
-    collect_raw.one((CFG, mode, 2000))
+    fit_q3.collect_one((CFG, mode, 2000))
   return tmp_path
 
 

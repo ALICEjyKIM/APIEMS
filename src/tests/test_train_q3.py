@@ -10,8 +10,8 @@ import pytest
 import torch
 from utils.params import Cfg
 from value.raw import load_adv, load_td
-from result import collect_raw
-from result.train_q3 import METHODS, fqi, predict, metrics, grid
+from result.train import fit_q3
+from result.train.fit_q3 import METHODS, fqi, predict, metrics, grid
 
 torch.set_num_threads(2)
 CFG = replace(Cfg(), T=4, mlp_epochs=20)
@@ -21,11 +21,11 @@ CFG = replace(Cfg(), T=4, mlp_epochs=20)
 @pytest.fixture(scope="module")
 def data(tmp_path_factory):
   d = tmp_path_factory.mktemp("raw")
-  collect_raw.DIR = str(d)
+  fit_q3.DIR = str(d)
   for mode, reps in (("td", (2000, 2001)), ("adv", (2000,))):
     os.makedirs(f"{d}/{mode}")
     for r in reps:
-      collect_raw.one((CFG, mode, r))
+      fit_q3.collect_one((CFG, mode, r))
   return load_td(CFG, [f"{d}/td/2000.pkl.gz", f"{d}/td/2001.pkl.gz"]), load_adv(CFG, [f"{d}/adv/2000.pkl.gz"])
 
 

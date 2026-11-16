@@ -1,6 +1,6 @@
 """공급자 교체 난수 점검 (ref/decisions.md "공급자 교체 난수 점검"): 같은 상태 · 같은 미래에서 m = 1과 M_HI 두 세계를 끝까지 돌려, 대체 후보 난수 키(time, slot)별로 갈라지는 정도를 잰다.
 준비 기간은 기본 키(time)로 돌리고 미래만 키를 바꾼다. 측정: 미래별 끝까지 차이의 표준편차, 두 세계 누적 순이윤의 상관, 마지막에 한쪽에만 있는 공급자 · 주문자 비율.
-결과 result/runs/check_crn_x2.json. 실행: src/에서 python -m result.check_crn [Cfg 키=값 ...] (예: n_proc=4)
+결과 result/runs/check_crn_x2.json. 실행: src/에서 python -m result.check.crn [Cfg 키=값 ...] (예: n_proc=4)
 """
 from copy import deepcopy
 from dataclasses import replace
@@ -10,7 +10,7 @@ import sys
 import numpy as np
 from utils.params import Cfg, SCALE
 from env.sim import Sim
-from result.headroom import fut
+from result.common import fut
 
 REPS, T1, KF, M_HI, KEYS = (1000, 1001, 1002, 1003), 12, 6, 1.5, ("time", "slot")
 

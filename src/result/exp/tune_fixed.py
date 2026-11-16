@@ -1,6 +1,6 @@
 """최선 고정값 튜닝 (N4): 후보 (m, θ)마다 30기간 고정으로 튜닝 반복을 돌려 누적 이윤 평균이 가장 큰 후보를 고른다.
 튜닝 반복 1000~1029는 평가 반복(0~29)과 분리하고, 공통 난수로 같은 반복끼리 1위와의 차이를 잰다 (ref/decisions.md "최선 고정값 튜닝").
-결과는 result/runs/tune_fixed[_x2][_바꾼Cfg키값].json. 실행: src/에서 python -m result.tune_fixed [x2|x4] [Cfg 키=값 ...] [base=파일] (시장 규모 기본 ×1, base는 이미 돌린 후보를 합쳐 함께 비교)
+결과는 result/runs/tune_fixed[_x2][_바꾼Cfg키값].json. 실행: src/에서 python -m result.exp.tune_fixed [x2|x4] [Cfg 키=값 ...] [base=파일] (시장 규모 기본 ×1, base는 이미 돌린 후보를 합쳐 함께 비교)
 """
 from dataclasses import replace
 import json
@@ -10,7 +10,7 @@ import numpy as np
 from utils.params import Cfg, SCALE
 from env.sim import run, cands
 from policy.base import fixed
-from result.exp_long_x2 import ovr
+from result.common import ovr
 
 REPS = range(1000, 1030)
 

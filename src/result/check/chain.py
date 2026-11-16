@@ -1,6 +1,6 @@
 """제외 연쇄 점검 (ref/decisions.md "제외 연쇄 점검"): 이번 기간만 m(θ = 0)으로 청산하고 이후 고정 padding으로 끝까지 돌리며 padding 제외 인원 → 다음 기간 참여자 수 → 이후 누적 참여 · 몫을 기록한다.
 "제외된 참여자는 덜 돌아온다"는 재참여 모형의 가정이고, 이 점검은 그 뒤의 연결(참여 감소가 플랫폼 몫을 얼마나 줄이나)을 잰다. 예상 청산의 제외 인원(입찰 전에 아는 값)도 함께 둔다.
-결과 result/runs/check_chain_{규모}_{태그}.json. 실행: src/에서 python -m result.check_chain x1 [키=값 ...] (예: ex_p=0.32, 없으면 태그 base)
+결과 result/runs/check_chain_{규모}_{태그}.json. 실행: src/에서 python -m result.check.chain x1 [키=값 ...] (예: ex_p=0.32, 없으면 태그 base)
 """
 from copy import deepcopy
 from dataclasses import replace
@@ -12,9 +12,7 @@ from utils.params import Cfg, SCALE
 from env.sim import Sim
 from mech.chu import clear
 from policy.base import est
-from result.check_pred import REPS, T0
-from result.headroom import fut, K
-from result.check_dev_ci import cci
+from result.common import REPS, T0, fut, K, cci
 
 KEYS = ("I", "exb", "exs", "nb1", "ns1", "pb", "ps", "win", "R")
 
