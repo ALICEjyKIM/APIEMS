@@ -2,7 +2,7 @@
 손으로 계산 가능한 작은 예: 완벽한 예측, 순서가 뒤집힌 예측, 값이 하나뿐인 예측.
 """
 import numpy as np
-from result.cmp_x1 import per
+from result.exp.cmp_x1 import per
 
 
 # 정답을 그대로 맞히면 적중 1, regret 0, 제곱오차 0, 순위 상관 1

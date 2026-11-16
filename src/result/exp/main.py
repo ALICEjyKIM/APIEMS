@@ -1,6 +1,6 @@
-"""본 실험 (메인·질문 1): 평가 반복 0~29에서 고정 padding(= 최선 고정값), 한 기간 최적, Q̂ 선형, Q̂ MLP, 제안 방법의 padding만·쿠폰만을 같은 공통 난수로 돌린다.
-1차는 Q̂를 train_qhat.json·qhat.pkl에서, 2차(td)는 train_td.json·qhat_td.pkl에서 읽고, 제안 방법은 검증 점수가 높은 근사 방법이다 (ref/decisions.md "본 실험 1차", "TD 학습 (2차)").
-결과는 result/runs/exp_main1.json, exp_main2.json. 실행: src/에서 python -m result.main1 [td]
+"""본 실험 (메인·질문 1): 평가 반복 0~29에서 고정 padding(= 최선 고정값), 한 기간 최적, Q̂ 선형, Q̂ MLP, 제안 방법의 padding만·재참여 보상만을 같은 공통 난수로 돌린다.
+1차는 Q̂를 train_qhat.json·qhat.pkl에서, 2차(td)는 train_td.json·qhat_td.pkl에서 읽고(result.train.fit_main), 제안 방법은 검증 점수가 높은 근사 방법이다 (ref/decisions.md "본 실험 1차", "TD 학습 (2차)").
+결과는 result/runs/exp_main1.json, exp_main2.json. 실행: src/에서 python -m result.exp.main [td]
 """
 import json
 import pickle
@@ -11,15 +11,9 @@ from utils.params import Cfg
 from env.sim import run
 from policy.base import fixed, myopic
 from policy.qpol import qpol
+from result.common import rec
 
 ONLY = {None: None, "pad": lambda m, th: th == 0, "cpn": lambda m, th: m == 1}
-
-
-# 기간별 기록 R의 요약
-def rec(name, rep, R):
-  a = lambda k, f=float: [f(r[k]) for r in R]
-  return dict(name=name, rep=rep, Pi=a("Pi"), G=a("G"), cpn=a("cpn"), paid=a("paid"), sw=a("sw"), m=a("m"), th=a("th"), win=a("win", int),
-              nb=a("nb", int), ns=a("ns", int), Ub=[int(r["Ub"].sum()) for r in R], Uj=[int(r["Uj"].sum()) for r in R])
 
 
 # 반복 하나를 정책 하나로 돌린 기간별 기록 요약

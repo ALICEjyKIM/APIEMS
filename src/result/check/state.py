@@ -1,22 +1,17 @@
-"""상태별 이후 손실 점검 (ref/decisions.md "상태별 이후 손실 점검"): 한 번 올린 대가 점검 ×2의 250개 상태에서 입찰 전 피처가 이후 손실 L을 시점 표보다 잘 설명하는지 본다.
-(1) 미래 앞 4개 · 뒤 4개 반분 신뢰도, (2) 반복 하나씩 빼는 교차 검증의 제곱오차, (3) 예상 이번 기간 이득 + 예측 L로 고른 m의 끝까지 차이(오프라인).
-결과 result/runs/check_state_x2.json. 실행: src/에서 python -m result.check_state [Cfg 키=값 ...] (예: n_proc=4)
+"""상태별 이후 손실 점검 (ref/decisions.md "상태별 이후 손실 점검", "상태 신호 점검 (작은 시장)"): 입찰 전 피처가 이후 손실 L을 기간 구간 평균보다 잘 설명하는지 본다.
+기본: 한 번 올린 대가 점검 ×2의 250개 상태에서 (1) 미래 앞 4개 · 뒤 4개 반분 신뢰도, (2) 반복 하나씩 빼는 교차 검증의 제곱오차, (3) 예상 이번 기간 이득 + 예측 L로 고른 m의 끝까지 차이(오프라인). rel: 제외 연쇄 점검 결과로 m마다 미래 앞 절반 · 뒤 절반으로 잰 L의 상관(기간 구간 평균을 뺀 값 · 빼지 않은 값), 미래 전체 평균의 신뢰도(Spearman-Brown), 신뢰도 0.5에 필요한 미래 수, 기준 시장 대비 상관 차이.
+결과 result/runs/check_state_x2.json, check_rel_x1.json. 실행: src/에서 python -m result.check.state [Cfg 키=값 ...] (예: n_proc=4), python -m result.check.state rel base het1.0 ... (태그마다 check_chain_x1_{태그}.json, 첫 태그가 기준)
 """
 from dataclasses import replace
 import json
 from multiprocessing import Pool
 import sys
 import numpy as np
-from scipy.stats import t as tdist
 from utils.params import Cfg, SCALE
 from env.sim import Sim
 from mech.chu import clear
 from policy.base import est
-from result.check_pred import REPS, T0
-from result.check_dev_ci import cci
-from result.exp_long_x2 import BINS
-
-COM = ("nb", "ns", "ret_b", "ret_s", "tight", "thin")
+from result.common import REPS, T0, BINS, COM, cci, jack, ls
 
 
 # 반복 하나의 고정 padding 경로에서 t ≥ T0 상태마다 입찰 전 피처와 평균 예측 몫(저장값 확인용)
@@ -39,19 +34,6 @@ def path(args):
 # 구간별 평균을 각 원소 자리에 (bb: 구간 번호)
 def bm(x, bb):
   return (np.bincount(bb, x) / np.bincount(bb))[bb]
-
-
-# 반복 jackknife 95% 구간: 통계 f(포함할 상태 마스크)를 반복 하나씩 빼고 다시 계산
-def jack(f, g):
-  u = np.unique(g)
-  v = np.array([f(g != k) for k in u])
-  se = np.sqrt((len(u) - 1) / len(u) * ((v - v.mean()) ** 2).sum())
-  return dict(mean=float(f(np.ones(len(g), bool))), ci=float(tdist.ppf(0.975, len(u) - 1) * se))
-
-
-# 최소제곱 계수
-def ls(X, y):
-  return np.linalg.lstsq(X, y, rcond=None)[0]
 
 
 # 요약: m별 반분 신뢰도, 교차 검증 예측 오차와 계수, 고른 m의 끝까지 차이
@@ -115,5 +97,38 @@ def main():
   print(json.dumps(out, indent=1))
 
 
+# rel: m별 반분 상관(raw · res), 미래 전체 평균의 신뢰도 sb, 신뢰도 0.5에 필요한 미래 수 need
+def rel(rows):
+  g, t = np.array([r["rep"] for r in rows]), np.array([r["t"] for r in rows])
+  b = np.searchsorted(BINS, t, side="right") - 1
+  I, R = np.array([r["I"] for r in rows]), np.array([r["R"] for r in rows])
+  I = I.mean(1) if I.ndim == 3 else I  # 제외 연쇄 점검은 I를 미래마다 같은 값으로 저장
+  I, R = I - I[:, :1], R - R[:, :, :1]
+  h, out = R.shape[1] // 2, []
+  La, Lb = R[:, :h].mean(1) - I, R[:, h:].mean(1) - I
+  for i in range(1, R.shape[2]):
+    rc = lambda k, res: np.corrcoef(*((x[k] - bm(x[k], b[k])) if res else x[k] for x in (La[:, i], Lb[:, i])))[0, 1]
+    raw, res = jack(lambda k: rc(k, False), g), jack(lambda k: rc(k, True), g)
+    sb = 2 * res["mean"] / (1 + res["mean"])
+    out.append(dict(raw=raw, res=res, sb=float(sb), need=float(R.shape[1] * (1 - sb) / sb) if sb > 0 else None))
+  return out
+
+
+# rel 실행: 태그마다 check_chain_x1_{태그}.json의 신뢰도, 첫 태그 대비 차이
+def rel_main():
+  tags = sys.argv[1:]
+  R = {k: rel(json.load(open(f"result/runs/check_chain_x1_{k}.json"))["rows"]) for k in tags}
+  for k in tags[1:]:
+    for a, z in zip(R[k], R[tags[0]]):
+      a["vs_base"] = dict(mean=a["res"]["mean"] - z["res"]["mean"], ci=float(np.hypot(a["res"]["ci"], z["res"]["ci"])))
+  out = dict(base=tags[0], ms=list(Cfg().m_grid[1:]), rel=R)
+  json.dump(out, open("result/runs/check_rel_x1.json", "w"), indent=1)
+  print(json.dumps(out, indent=1))
+
+
 if __name__ == "__main__":
-  main()
+  if sys.argv[1:2] == ["rel"]:
+    sys.argv.pop(1)
+    rel_main()
+  else:
+    main()

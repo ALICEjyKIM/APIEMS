@@ -1,6 +1,6 @@
-"""한 번 올린 대가 점검 (ref/decisions.md "한 번 올린 대가 점검"): 예측 점검과 같은 250개 상태에서 후보 m마다 이번 기간만 m(θ = 0), 이후 고정 padding으로 T까지 돌려 누적 이윤을 미래 난수 8개로 잰다.
-이번 기간 입찰은 공통이라 이번 기간 이득 I_m은 확정값이고, 끝까지 차이 D_m에서 I_m을 뺀 L_m이 이후 영향이다.
-규칙 평가: 시나리오 예측의 m*를 예상 이득 Δ̂ ≥ τ일 때만 쓰는 규칙, 평균 예측의 m*, 실제 입찰의 m*(상한), D 최대 후보(반분 검증 포함). 결과 result/runs/check_dev[_x2][_바꾼Cfg키값][_K미래수].json. 실행: src/에서 python -m result.check_dev [x2|x4] [Cfg 키=값 ...] [K=미래 수] (m을 일부만 잴 때 예: m_grid=1.05,1.15 K=4, 요약은 첫 m이 1일 때만)
+"""한 번 올린 대가 점검 (ref/decisions.md "한 번 올린 대가 점검"): 예측 점검과 같은 250개 상태에서 후보 m마다 이번 기간만 m(θ = 0), 이후 고정 padding으로 T까지 돌려 누적 이윤을 미래 난수 8개로 잰다. 이번 기간 이득 I_m은 확정값이고, 끝까지 차이 D_m에서 I_m을 뺀 L_m이 이후 영향이다.
+규칙 평가: 시나리오 예측의 m*를 예상 이득 Δ̂ ≥ τ일 때만 쓰는 규칙, 평균 예측의 m*, 실제 입찰의 m*(상한), D 최대 후보(반분 검증 포함). ci: 250개 상태가 시장 반복 10개에서 나와 같은 반복 안의 상태끼리 상관이 있으므로 m별 I·L·D와 규칙별 끝까지 차이를 반복 군집 표준오차와 t(군집 수 − 1)로 다시 잰다.
+결과 result/runs/check_dev[_x2][_바꾼Cfg키값][_K미래수].json, check_dev_cluster_ci.json. 실행: src/에서 python -m result.check.dev [x2|x4] [Cfg 키=값 ...] [K=미래 수] (m을 일부만 잴 때 예: m_grid=1.05,1.15 K=4, 요약은 첫 m이 1일 때만), python -m result.check.dev ci
 """
 from copy import deepcopy
 from dataclasses import replace
@@ -13,9 +13,7 @@ from utils.params import Cfg, SCALE
 from env.sim import Sim
 from mech.chu import clear
 from policy.base import est, scen
-from result.check_pred import REPS, T0
-from result.headroom import fut, K
-from result.exp_long_x2 import ovr, save, part
+from result.common import REPS, T0, fut, K, ovr, save, part, cci
 
 TAUS = (0, 5, 10, 15, 20, 30, 40, 50)
 
@@ -95,5 +93,38 @@ def main():
   print(json.dumps(out, indent=1))
 
 
+# 파일 하나의 반복 군집 구간: m별 (전체·이득 양수 상태) I·L·D, 규칙별 끝까지 차이
+def ci_one(name):
+  rows = json.load(open(f"result/runs/{name}"))["rows"]
+  g = np.array([r["rep"] for r in rows])
+  I, R = np.array([r["I"] for r in rows]), np.array([r["R"] for r in rows])
+  Gs, Gm = np.array([r["G_saa"] for r in rows]), np.array([r["G_mean"] for r in rows])
+  I, D = I - I[:, :1], (R - R[:, :, :1]).mean(1)
+  L, n = D - I, len(rows)
+  out = dict(all={}, pos={}, rules={})
+  for i in range(1, I.shape[1]):
+    k = I[:, i] > 0
+    out["all"][i] = {a: cci(x[:, i], g) for a, x in (("I", I), ("L", L), ("D", D))}
+    out["pos"][i] = dict(share=float(k.mean()), **{a: cci(x[k, i], g[k]) for a, x in (("I", I), ("L", L), ("D", D))})
+  pick = lambda j: D[np.arange(n), j]
+  i_saa, dh = Gs.argmax(1), Gs.max(1) - Gs[:, 0]
+  sel = dict(mean=Gm.argmax(1), saa_tau0=i_saa, saa_tau30=np.where(dh >= 30, i_saa, 0), oracle_now=I.argmax(1),
+             oracle_small=np.where(I[:, 1] > 0, 1, 0))
+  out["rules"] = {a: dict(dev=float((j > 0).mean()), **cci(pick(j), g)) for a, j in sel.items()}
+  return out
+
+
+# ci: check_dev.json(×1) · check_dev_x2.json(×2)의 반복 군집 구간
+def ci():
+  out = {s: ci_one(f) for s, f in (("x1", "check_dev.json"), ("x2", "check_dev_x2.json"))}
+  json.dump(out, open("result/runs/check_dev_cluster_ci.json", "w"), indent=1)
+  for s, o in out.items():
+    print(s, "pos D:", [(round(o["pos"][i]["D"]["mean"]), round(o["pos"][i]["D"]["ci"]), round(o["pos"][i]["D"]["ci_iid"])) for i in (1, 2, 3)])
+    print(s, "rules:", {a: (round(v["mean"], 1), round(v["ci"], 1)) for a, v in o["rules"].items()})
+
+
 if __name__ == "__main__":
-  main()
+  if sys.argv[1:2] == ["ci"]:
+    ci()
+  else:
+    main()

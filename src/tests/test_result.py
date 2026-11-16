@@ -6,7 +6,7 @@ import json
 import pytest
 from dataclasses import replace
 from utils.params import Cfg
-from result.exp_long_x2 import ovr, lbar, save, part
+from result.common import ovr, lbar, save, part
 
 TS = (5, 12, 17, 22, 27)
 

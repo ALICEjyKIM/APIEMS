@@ -83,14 +83,15 @@
 - 실행은 conda 환경 apiems의 python (C:\Users\Jiyoon\anaconda3\envs\apiems\python.exe, gurobipy·학술 라이선스 포함)
 - 테스트: src/에서 `python -m pytest tests`
 - 실험 결과는 src/result/runs/*.json에만 저장하고, 그림·표는 그 json에서만 만든다. 보고하는 표마다 출처 파일명을 적는다.
-- result/runs의 *.log, *.err는 지우지 않는다 (실수 기록).
+- 실행 기록은 src/result/runs/log/에 *.log, *.err로 남기고 지우지 않는다 (실수 기록). 예: `python -m result.check.dev x2 > result/runs/log/check_dev_x2.log 2> result/runs/log/check_dev_x2.err`
 
 ## 폴더
 
 - `src/utils/`: params(Cfg), rng(공통 난수), market(시장 생성)
 - `src/mech/`: Chu IPB 청산
-- `src/env/`: 기간 엔진, PreObs/Bids, 재참여 (예정)
-- `src/policy/`, `src/value/`: 비교 정책, Q̂ 근사 (예정)
-- `src/tests/`, `src/result/runs/`
+- `src/env/`: 기간 엔진, PreObs/Bids, 재참여
+- `src/policy/`, `src/value/`: 비교 정책, Q̂ 근사
+- `src/result/`: 실험 스크립트. `common.py`(공용 함수), `exp/`(본 실험), `train/`(Q̂ 학습), `check/`(점검), `runs/`(결과 json, `log/`는 실행 기록), `data/`(학습 자료·모형). 폴더 이름 + 파일 이름이 결과 json 이름 앞부분이다 (check/dev.py → check_dev*.json). 실행은 src/에서 `python -m result.check.dev`
+- `src/tests/`
 - `ref/`: design.md, decisions.md, plan/(roadmap, 시장 환경 정의 market_v2·history·interaction_diag)
 - `paper/`: 선행연구 PDF. `legacy/`: 이전 구조 (동결)

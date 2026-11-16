@@ -1,23 +1,66 @@
-"""질문 3 학습 (TD): 원재료(result.collect_raw)로 선형·MLP·MLP + 구조 요약·GNN을 같은 자료, 같은 탐색 예산 8개씩으로 기간 T−1부터 1까지 거꾸로 학습한다.
-목표·조기 종료·선택 기준은 train_td와 같다 (ref/decisions.md "TD 학습 (2차)", "질문 3 비교 범위"). 평가는 adv 원재료 전체 상태에서 고른 후보의 실제 A 평균, regret, 최선 적중률, 후보 순위 상관, RMSE.
-결과 result/runs/train_q3.json, 모형 result/data/qhat_q3.pkl. 실행: src/에서 python -m result.train_q3 [작업자 수] (설정마다 result/data/q3_part에 저장, 다시 실행하면 저장된 설정은 건너뜀)
+"""질문 3 Q̂ 학습 (ref/decisions.md "질문 3 비교 범위", "TD 학습 (2차)"): 행동 정책 경로의 상태마다 피처 대신 입찰 전 관측(PreObs)과 후보 m별 예상 청산(value.feat.plan)을 원재료로 모으고, 선형·MLP·MLP + 구조 요약·GNN을 같은 자료, 같은 탐색 예산 8개씩으로 기간 T−1부터 1까지 거꾸로 학습한다.
+collect adv: 후보 12개로 분기해 끝까지 돌린 남은 누적 이윤(fit_main collect와 같은 반복·난수). collect td: 후보 12개를 한 기간만 진행한 Π와 다음 상태의 (관측, 예상 청산). train: 목표·조기 종료·선택 기준은 fit_main train_td와 같고, 평가는 adv 원재료 전체 상태에서 고른 후보의 실제 A 평균, regret, 최선 적중률, 후보 순위 상관, RMSE.
+원재료 result/data/raw/{adv|td}/{rep}.pkl.gz(있으면 건너뜀), 결과 result/runs/train_q3.json, 모형 result/data/qhat_q3.pkl. 실행: src/에서 python -m result.train.fit_q3 collect adv|td, python -m result.train.fit_q3 train [작업자 수] (설정마다 result/data/q3_part에 저장, 다시 실행하면 저장된 설정은 건너뜀)
 """
+from copy import deepcopy
+from multiprocessing import Pool
+import gzip
 import json
 import os
 import pickle
 import sys
 import time
-from multiprocessing import Pool
 import numpy as np
 import torch
 from utils.params import Cfg
+from env.sim import Sim, cands
+from value.feat import plan, ready
 from value.fit import QT, scaler, ridge, mlp, score
 from value.gnn import gnn
 from value.raw import load_adv, load_td
+from result.common import behave
 
 METHODS = ("lin", "mlp", "mlps", "gnn")
 DATA = {}
+DIR = "result/data/raw"
 PART = "result/data/q3_part"
+
+
+# 저장용 관측·예상 청산: 배정 y는 int16, Q는 int32로 줄인다
+def pack(cfg, o):
+  P = plan(cfg, o)
+  for p in P.values():
+    p.y, p.Q = p.y.astype(np.int16), p.Q.astype(np.int32)
+  return o, P
+
+
+# 반복 하나: 상태마다 (관측, 예상 청산)과 adv는 후보별 남은 누적 이윤, td는 후보별 (Π, 다음 관측, 다음 예상 청산)
+def collect_one(args):
+  cfg, mode, rep = args
+  path = f"{DIR}/{mode}/{rep}.pkl.gz"
+  if os.path.exists(path):
+    return rep
+  t0, C = time.time(), cands(cfg)
+  assert C[0] == (1.0, 0.0)
+  s, pol, rows = Sim(cfg, rep), behave(cfg, rep), []
+  while s.t < cfg.T:
+    o = s.pre()
+    if o.t > 0 and ready(o):
+      row = dict(t=o.t, obs=pack(cfg, o), pi=[], nxt=[])
+      for a in C:
+        b = deepcopy(s)
+        r = b.step(*a)["Pi"]
+        if mode == "adv":
+          while b.t < cfg.T:
+            r += b.step(*pol(b.pre()))["Pi"]
+        else:
+          row["nxt"].append(pack(cfg, b.pre()) if b.t < cfg.T else None)
+        row["pi"].append(r)
+      rows.append(row)
+    s.step(*pol(o))
+  pickle.dump(dict(rep=rep, mode=mode, rows=rows), gzip.open(path, "wb"))
+  print(rep, len(rows), round(time.time() - t0), flush=True)
+  return rep
 
 
 # 방법별 입력: 표(lin, mlp), 표 + 구조 요약(mlps), (표, 그래프 목록)(gnn). 상태 단위 배열 → 행 단위
@@ -131,7 +174,17 @@ def fit_part(args):
   return i
 
 
-def main():
+# 원재료 수집: adv는 학습 반복 rep0_train부터 n_train개, td는 TD 반복 rep0_td부터 n_td개
+def collect():
+  cfg, mode = Cfg(), sys.argv[1]
+  os.makedirs(f"{DIR}/{mode}", exist_ok=True)
+  r0, n = (cfg.rep0_train, cfg.n_train) if mode == "adv" else (cfg.rep0_td, cfg.n_td)
+  with Pool(cfg.n_proc) as p:
+    p.map(collect_one, [(cfg, mode, r) for r in range(r0, r0 + n)], chunksize=1)
+
+
+# 네 방법의 탐색 예산 전부를 학습하고 방법마다 검증 점수가 가장 높은 설정을 고른다
+def train():
   cfg, n = Cfg(), int(sys.argv[1]) if len(sys.argv) > 1 else 8
   g = grid(cfg)
   os.makedirs(PART, exist_ok=True)
@@ -157,4 +210,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  {"collect": collect, "train": train}[sys.argv.pop(1)]()

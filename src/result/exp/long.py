@@ -1,47 +1,19 @@
-"""×2 장기 표 규칙 실험 (ref/decisions.md "×2 장기 표 규칙 실험"): 평가 반복 0~29에서 고정 padding, 최선 고정값(best), 한 기간 최적(평균 · 시나리오), 장기 표 규칙(평균 · 시나리오)을 같은 공통 난수로 30기간 돌린다.
-이후 손실 표 Lbar는 한 번 올린 대가 점검 ×2(check_dev_x2.json, 반복 1000~1009)에서 시점 구간별 · m별 평균 L = D − I로 만든다. 그 파일에 없는 m은 dev=파일(같은 상태 · 같은 미래에서 잰 점검)에서 더한다.
-결과 result/runs/exp_long_{규모}[_정책들][_바꾼Cfg키값][_r첫반복-끝반복].json. 실행: src/에서 python -m result.exp_long_x2 [규모] [정책 이름 ...] [Cfg 키=값 ...] [dev=파일] (규모 기본 x2, 정책 없으면 best를 뺀 다섯 개, 표 규칙은 x2에서만, 튜플은 쉼표로. 예: rep0=30 reps=60 m_grid=1,1.05,1.1)
+"""기간별 평균 이후 손실 반영 정책 실험 (ref/decisions.md "×2 장기 표 규칙 실험"): 평가 반복 0~29에서 고정 padding, 최선 고정값(best), 한 기간 최적(평균 · 시나리오), 기간별 평균 이후 손실 반영 정책(평균 · 시나리오)을 같은 공통 난수로 30기간 돌린다.
+이후 손실 표 Lbar는 한 번 올린 대가 점검 ×2(check_dev_x2.json, 반복 1000~1009)에서 기간 구간별 · m별 평균 L = D − I로 만든다(result.common.lbar). 그 파일에 없는 m은 dev=파일(같은 상태 · 같은 미래에서 잰 점검)에서 더한다.
+결과 result/runs/exp_long_{규모}[_정책들][_바꾼Cfg키값][_r첫반복-끝반복].json. 실행: src/에서 python -m result.exp.long [규모] [정책 이름 ...] [Cfg 키=값 ...] [dev=파일] (규모 기본 x2, 정책 없으면 best를 뺀 다섯 개, table 정책은 x2에서만, 튜플은 쉼표로. 예: rep0=30 reps=60 m_grid=1,1.05,1.1)
 """
 from dataclasses import replace
 import json
 from multiprocessing import Pool
 import os
-import re
 import sys
 import numpy as np
 from utils.params import Cfg, SCALE
 from env.sim import run, cands
 from policy.base import fixed, myopic, saa, table
+from result.common import BINS, DEV, ovr, lbar, save, part
 
-BINS = (0, 10, 15, 20, 25)
 NAMES = ("table_saa", "saa", "table_mean", "myopic", "fixed")
-DEV = "result/runs/check_dev_x2.json"
-
-
-# 키=값 문자열로 바꾼 Cfg (튜플은 쉼표로 나눈 실수)
-def ovr(cfg, ov):
-  f = lambda k, v: tuple(float(x) for x in v.split(",")) if isinstance(getattr(cfg, k), tuple) else type(getattr(cfg, k))(v)
-  return replace(cfg, **{k: f(k, v) for k, v in ov.items()})
-
-
-# 점검 결과 파일이 잰 m 목록 (저장된 cfg 기록에서)
-def grid(j):
-  return tuple(float(x) for x in re.search(r"m_grid=\(([^)]*)\)", j["cfg"]).group(1).split(",") if x.strip())
-
-
-# 이후 손실 표: 시점 구간 [BINS[k], BINS[k+1])마다 m별 평균 (D − I), m = 1 대비 (기간 0~4는 첫 구간의 자료 t = 5~9로 정해진다).
-# 첫 파일이 m = 1을 담는다. 다른 파일의 m은 같은 상태에서 m = 1의 같은 미래 앞 k개와 짝짓는다
-def lbar(ms, paths=(DEV,)):
-  J = [json.load(open(p)) for p in paths]
-  one, v = {(r["rep"], r["t"]): r for r in J[0]["rows"]}, {}
-  assert grid(J[0])[0] == 1.0
-  for j in J:
-    assert {(r["rep"], r["t"]) for r in j["rows"]} == set(one)
-    for i, m in enumerate(grid(j)):
-      assert m not in v
-      v[m] = [(r["t"], float(np.mean(np.array(r["R"])[:, i] - np.array(one[(r["rep"], r["t"])]["R"])[:len(r["R"]), 0]) - (r["I"][i] - one[(r["rep"], r["t"])]["I"][0]))) for r in j["rows"]]
-  hi = lambda k: BINS[k + 1] if k + 1 < len(BINS) else 10 ** 9
-  return [[float(np.mean([x for t, x in v[m] if lo <= t < hi(k)])) for m in ms] for k, lo in enumerate(BINS)]
 
 
 # 정책 이름 → 정책 (작업자 안에서 만든다)
@@ -56,24 +28,6 @@ def one(args):
   R = run(cfg, rep, pol(cfg, name, L))
   a = lambda k: [float(r[k]) for r in R]
   return dict(name=name, rep=rep, Pi=a("Pi"), G=a("G"), paid=a("paid"), sw=a("sw"), m=a("m"), nb=a("nb"), ns=a("ns"), win=a("win"))
-
-
-# 중간 저장: 임시 파일에 다 쓴 뒤 바꿔 끼워, 쓰는 도중 컴퓨터가 꺼져도 깨진 파일이 남지 않게 한다
-def save(path, d):
-  with open(path + ".tmp", "w") as f:
-    json.dump(d, f)
-    f.flush()
-    os.fsync(f.fileno())
-  os.replace(path + ".tmp", path)
-
-
-# 중간 저장된 실행 기록 (같은 설정으로 다시 실행할 때만 이어 쓴다)
-def part(path, cfg):
-  if not os.path.exists(path):
-    return []
-  j = json.load(open(path))
-  assert j["cfg"] == repr(cfg)
-  return j["rows"]
 
 
 # 짝지은 차이의 평균과 95% 구간

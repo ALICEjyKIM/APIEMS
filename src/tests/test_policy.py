@@ -126,6 +126,6 @@ def test_qpol_kinds():
 
 # 질문 3 본 실험의 반복 하나: GNN 입력 정책으로 T기간을 돌려 기록 요약과 시간을 낸다 (기간 0은 고정 padding)
 def test_main_q3_one():
-  from result.main_q3 import one
+  from result.exp.q3 import one
   r = one((CFG, 0, "q_gnn", lambda inp: inp[0][:, 17]))
   assert len(r["Pi"]) == CFG.T and r["m"][0] == 1.0 and all(m == 1.5 for m in r["m"][1:]) and r["sec"] > 0

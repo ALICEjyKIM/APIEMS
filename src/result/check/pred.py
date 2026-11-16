@@ -1,6 +1,6 @@
 """예측 점검 (한 기간, ref/decisions.md "예측 점검"): 고정 padding 경로(반복 1000~1009, t ≥ 5)의 각 기간에서 예측기별로 고른 m의 실제 플랫폼 몫을 비교한다.
 예측기: 평균(est), 시나리오 saa_k개와 앞 절반(scen), 재참여자 지난 신고가 + 신규 시나리오(참고, scen_ind), 실제 입찰(상한). 후보는 m_grid, θ는 이번 기간 몫에 영향이 없어 뺀다.
-결과 result/runs/check_pred.json. 실행: src/에서 python -m result.check_pred [작업자 수]
+결과 result/runs/check_pred.json. 실행: src/에서 python -m result.check.pred [작업자 수]
 """
 import json
 import sys
@@ -11,8 +11,7 @@ from utils.params import Cfg
 from env.sim import Sim
 from mech.chu import clear
 from policy.base import est, scen, scen_ind
-
-REPS, T0 = range(1000, 1010), 5
+from result.common import REPS, T0
 
 
 # 고정 padding 경로의 기간별 (반복, t, 입찰 전 관측, 실제 입찰)

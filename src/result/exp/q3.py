@@ -1,6 +1,6 @@
-"""본 실험 (질문 3): 평가 반복 0~29에서 고정 padding, 한 기간 최적, Q̂ 선형·MLP·MLP + 구조 요약·GNN(train_q3가 고른 모형)을 같은 공통 난수로 돌린다.
+"""본 실험 (질문 3): 평가 반복 0~29에서 고정 padding, 한 기간 최적, Q̂ 선형·MLP·MLP + 구조 요약·GNN(result.train.fit_q3가 고른 모형)을 같은 공통 난수로 돌린다.
 주 지표는 MLP 대비 누적 이윤 차이이고 고정 padding·한 기간 최적 대비도 적는다 (ref/decisions.md "질문 3 비교 범위"). 기간당 결정 시간도 기록한다.
-결과 result/runs/exp_q3.json. 실행: src/에서 python -m result.main_q3
+결과 result/runs/exp_q3.json. 실행: src/에서 python -m result.exp.q3
 """
 import json
 import pickle
@@ -12,7 +12,7 @@ from utils.params import Cfg
 from env.sim import run
 from policy.base import fixed, myopic
 from policy.qpol import qpol
-from result.main1 import rec
+from result.common import rec
 
 KIND = dict(lin="tab", mlp="tab", mlps="struct", gnn="graph")
 
